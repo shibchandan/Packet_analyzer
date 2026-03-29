@@ -1,4 +1,5 @@
 #include "fast_path.h"
+#include <algorithm>
 #include <iostream>
 #include <sstream>
 #include <iomanip>
@@ -208,6 +209,7 @@ PacketAction FastPathProcessor::checkRules(const PacketJob& job, Connection* con
     auto block_reason = rule_manager_->shouldBlock(
         src_ip,
         job.tuple.dst_port,
+        job.tuple.protocol,
         conn->app_type,
         conn->sni
     );
@@ -230,12 +232,23 @@ PacketAction FastPathProcessor::checkRules(const PacketJob& job, Connection* con
             case RuleManager::BlockReason::PORT:
                 ss << "Port " << block_reason->detail;
                 break;
+            case RuleManager::BlockReason::PROTOCOL:
+                ss << "Protocol " << block_reason->detail;
+                break;
         }
         
         std::cout << ss.str() << std::endl;
         
         // Mark connection as blocked
-        conn_tracker_.blockConnection(conn);
+        const char* reason_type = "UNKNOWN";
+        switch (block_reason->type) {
+            case RuleManager::BlockReason::IP: reason_type = "IP"; break;
+            case RuleManager::BlockReason::APP: reason_type = "APP"; break;
+            case RuleManager::BlockReason::DOMAIN: reason_type = "DOMAIN"; break;
+            case RuleManager::BlockReason::PORT: reason_type = "PORT"; break;
+            case RuleManager::BlockReason::PROTOCOL: reason_type = "PROTOCOL"; break;
+        }
+        conn_tracker_.blockConnection(conn, reason_type, block_reason->detail);
         
         return PacketAction::DROP;
     }
@@ -335,70 +348,82 @@ FPManager::AggregatedStats FPManager::getAggregatedStats() const {
     return stats;
 }
 
-std::string FPManager::generateClassificationReport() const {
-    // Aggregate app distribution across all FPs
+FPManager::ClassificationSummary FPManager::getClassificationSummary() const {
     std::unordered_map<AppType, size_t> app_counts;
     std::unordered_map<std::string, size_t> domain_counts;
+    std::unordered_map<std::string, size_t> blocked_reason_counts;
     size_t total_classified = 0;
     size_t total_unknown = 0;
-    
+
     for (const auto& fp : fps_) {
         fp->getConnectionTracker().forEach([&](const Connection& conn) {
             app_counts[conn.app_type]++;
-            
+
             if (conn.app_type == AppType::UNKNOWN) {
                 total_unknown++;
             } else {
                 total_classified++;
             }
-            
+
             if (!conn.sni.empty()) {
                 domain_counts[conn.sni]++;
             }
+
+            if (!conn.blocked_reason_type.empty()) {
+                blocked_reason_counts[conn.blocked_reason_type + ": " + conn.blocked_reason_detail]++;
+            }
         });
     }
-    
-    std::ostringstream ss;
-    ss << "\n╔══════════════════════════════════════════════════════════════╗\n";
-    ss << "║                 APPLICATION CLASSIFICATION REPORT             ║\n";
-    ss << "╠══════════════════════════════════════════════════════════════╣\n";
-    
-    size_t total = total_classified + total_unknown;
-    double classified_pct = total > 0 ? (100.0 * total_classified / total) : 0;
-    double unknown_pct = total > 0 ? (100.0 * total_unknown / total) : 0;
-    
-    ss << "║ Total Connections:    " << std::setw(10) << total << "                           ║\n";
-    ss << "║ Classified:           " << std::setw(10) << total_classified 
-       << " (" << std::fixed << std::setprecision(1) << classified_pct << "%)                  ║\n";
-    ss << "║ Unidentified:         " << std::setw(10) << total_unknown
-       << " (" << std::fixed << std::setprecision(1) << unknown_pct << "%)                  ║\n";
-    
-    ss << "╠══════════════════════════════════════════════════════════════╣\n";
-    ss << "║                    APPLICATION DISTRIBUTION                   ║\n";
-    ss << "╠══════════════════════════════════════════════════════════════╣\n";
-    
-    // Sort apps by count
-    std::vector<std::pair<AppType, size_t>> sorted_apps(
-        app_counts.begin(), app_counts.end());
-    std::sort(sorted_apps.begin(), sorted_apps.end(),
+
+    ClassificationSummary summary;
+    summary.total_connections = total_classified + total_unknown;
+    summary.total_classified = total_classified;
+    summary.total_unknown = total_unknown;
+    summary.app_counts.assign(app_counts.begin(), app_counts.end());
+    summary.domain_counts.assign(domain_counts.begin(), domain_counts.end());
+    summary.blocked_reason_counts.assign(blocked_reason_counts.begin(), blocked_reason_counts.end());
+
+    std::sort(summary.app_counts.begin(), summary.app_counts.end(),
               [](const auto& a, const auto& b) { return a.second > b.second; });
-    
-    for (const auto& pair : sorted_apps) {
-        double pct = total > 0 ? (100.0 * pair.second / total) : 0;
-        
-        // Create a simple bar graph
-        int bar_len = static_cast<int>(pct / 5);  // 20 chars max
-        std::string bar(bar_len, '#');
-        
-        ss << "║ " << std::setw(15) << std::left << appTypeToString(pair.first)
-           << std::setw(8) << std::right << pair.second
-           << " " << std::setw(5) << std::fixed << std::setprecision(1) << pct << "% "
-           << std::setw(20) << std::left << bar << "   ║\n";
-    }
-    
-    ss << "╚══════════════════════════════════════════════════════════════╝\n";
-    
-    return ss.str();
+    std::sort(summary.domain_counts.begin(), summary.domain_counts.end(),
+              [](const auto& a, const auto& b) { return a.second > b.second; });
+    std::sort(summary.blocked_reason_counts.begin(), summary.blocked_reason_counts.end(),
+              [](const auto& a, const auto& b) { return a.second > b.second; });
+
+    return summary;
 }
 
+std::string FPManager::generateClassificationReport() const {
+    ClassificationSummary summary = getClassificationSummary();
+
+    std::ostringstream ss;
+    ss << "\nApplication Classification Report\n";
+    ss << "---------------------------------\n";
+
+    size_t total = summary.total_connections;
+    double classified_pct = total > 0 ? (100.0 * summary.total_classified / total) : 0.0;
+    double unknown_pct = total > 0 ? (100.0 * summary.total_unknown / total) : 0.0;
+
+    ss << "Total Connections: " << total << "\n";
+    ss << "Classified:        " << summary.total_classified
+       << " (" << std::fixed << std::setprecision(1) << classified_pct << "%)\n";
+    ss << "Unidentified:      " << summary.total_unknown
+       << " (" << std::fixed << std::setprecision(1) << unknown_pct << "%)\n\n";
+
+    ss << "Application Distribution\n";
+    ss << "------------------------\n";
+
+    for (const auto& pair : summary.app_counts) {
+        double pct = total > 0 ? (100.0 * pair.second / total) : 0.0;
+        int bar_len = static_cast<int>(pct / 5);
+        std::string bar(bar_len, '#');
+
+        ss << std::setw(15) << std::left << appTypeToString(pair.first)
+           << std::setw(8) << std::right << pair.second
+           << " " << std::setw(5) << std::fixed << std::setprecision(1) << pct << "% "
+           << bar << "\n";
+    }
+
+    return ss.str();
+}
 } // namespace DPI

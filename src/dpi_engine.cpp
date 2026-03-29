@@ -2,10 +2,66 @@
 #include <iostream>
 #include <sstream>
 #include <iomanip>
+#include <algorithm>
 #include <chrono>
 #include <cstring>
+#include <fstream>
 
 namespace DPI {
+
+namespace {
+
+std::string jsonEscape(const std::string& input) {
+    std::ostringstream ss;
+    for (char c : input) {
+        switch (c) {
+            case '\\': ss << "\\\\"; break;
+            case '"': ss << "\\\""; break;
+            case '\n': ss << "\\n"; break;
+            case '\r': ss << "\\r"; break;
+            case '\t': ss << "\\t"; break;
+            default: ss << c; break;
+        }
+    }
+    return ss.str();
+}
+
+std::string ipToString(uint32_t ip) {
+    std::ostringstream ss;
+    ss << ((ip >> 0) & 0xFF) << "."
+       << ((ip >> 8) & 0xFF) << "."
+       << ((ip >> 16) & 0xFF) << "."
+       << ((ip >> 24) & 0xFF);
+    return ss.str();
+}
+
+std::string protocolToString(uint8_t protocol) {
+    switch (protocol) {
+        case 1: return "ICMP";
+        case 6: return "TCP";
+        case 17: return "UDP";
+        default: return "OTHER";
+    }
+}
+
+template <typename K>
+std::vector<std::pair<K, uint64_t>> topEntries(const std::unordered_map<K, uint64_t>& counts, size_t limit = 10) {
+    std::vector<std::pair<K, uint64_t>> entries(counts.begin(), counts.end());
+    std::sort(entries.begin(), entries.end(),
+              [](const auto& a, const auto& b) { return a.second > b.second; });
+    if (entries.size() > limit) {
+        entries.resize(limit);
+    }
+    return entries;
+}
+
+std::string dnsKey(const std::string& domain, uint32_t src_ip, uint32_t dst_ip) {
+    std::ostringstream ss;
+    ss << domain << "|" << src_ip << "|" << dst_ip;
+    return ss.str();
+}
+
+}  // namespace
 
 // ============================================================================
 // DPIEngine Implementation
@@ -125,6 +181,11 @@ bool DPIEngine::processFile(const std::string& input_file,
     
     std::cout << "\n[DPIEngine] Processing: " << input_file << "\n";
     std::cout << "[DPIEngine] Output to:  " << output_file << "\n\n";
+
+    {
+        std::lock_guard<std::mutex> lock(analytics_mutex_);
+        analytics_ = TrafficAnalytics{};
+    }
     
     // Initialize if not already done
     if (!rule_manager_) {
@@ -201,6 +262,7 @@ void DPIEngine::readerThreadFunc(const std::string& input_file) {
         // Update global stats
         stats_.total_packets++;
         stats_.total_bytes += raw.data.size();
+        recordPacketAnalytics(job);
         
         if (parsed.has_tcp) {
             stats_.tcp_packets++;
@@ -215,6 +277,15 @@ void DPIEngine::readerThreadFunc(const std::string& input_file) {
     
     std::cout << "[Reader] Finished reading " << packet_id << " packets\n";
     reader.close();
+}
+
+void DPIEngine::recordPacketAnalytics(const PacketJob& job) {
+    std::lock_guard<std::mutex> lock(analytics_mutex_);
+    analytics_.src_ip_counts[job.tuple.src_ip]++;
+    analytics_.dst_ip_counts[job.tuple.dst_ip]++;
+    analytics_.src_port_counts[job.tuple.src_port]++;
+    analytics_.dst_port_counts[job.tuple.dst_port]++;
+    analytics_.protocol_counts[job.tuple.protocol]++;
 }
 
 PacketJob DPIEngine::createPacketJob(const PacketAnalyzer::RawPacket& raw,
@@ -294,6 +365,8 @@ void DPIEngine::outputThreadFunc() {
 }
 
 void DPIEngine::handleOutput(const PacketJob& job, PacketAction action) {
+    recordDnsAnalytics(job, action);
+
     if (action == PacketAction::DROP) {
         stats_.dropped_packets++;
         return;
@@ -301,6 +374,36 @@ void DPIEngine::handleOutput(const PacketJob& job, PacketAction action) {
     
     stats_.forwarded_packets++;
     output_queue_.push(job);
+}
+
+void DPIEngine::recordDnsAnalytics(const PacketJob& job, PacketAction action) {
+    if ((job.tuple.dst_port != 53 && job.tuple.src_port != 53) ||
+        job.payload_offset >= job.data.size() ||
+        job.payload_length == 0) {
+        return;
+    }
+
+    const uint8_t* payload = job.data.data() + job.payload_offset;
+    auto domain = DNSExtractor::extractQuery(payload, job.payload_length);
+    if (!domain) {
+        return;
+    }
+
+    const uint32_t source_ip = job.tuple.src_ip;
+    const uint32_t dns_server_ip = (job.tuple.dst_port == 53) ? job.tuple.dst_ip : job.tuple.src_ip;
+    const std::string key = dnsKey(*domain, source_ip, dns_server_ip);
+
+    std::lock_guard<std::mutex> lock(analytics_mutex_);
+    auto& entry = analytics_.dns_queries[key];
+    if (entry.count == 0) {
+        entry.domain = *domain;
+        entry.source_ip = source_ip;
+        entry.dns_server_ip = dns_server_ip;
+    }
+    entry.count++;
+    if (action == PacketAction::DROP) {
+        entry.blocked_count++;
+    }
 }
 
 bool DPIEngine::writeOutputHeader(const PacketAnalyzer::PcapGlobalHeader& header) {
@@ -387,6 +490,18 @@ void DPIEngine::unblockDomain(const std::string& domain) {
     }
 }
 
+void DPIEngine::blockProtocol(const std::string& protocol_name) {
+    if (rule_manager_) {
+        rule_manager_->blockProtocol(protocol_name);
+    }
+}
+
+void DPIEngine::unblockProtocol(const std::string& protocol_name) {
+    if (rule_manager_) {
+        rule_manager_->unblockProtocol(protocol_name);
+    }
+}
+
 bool DPIEngine::loadRules(const std::string& filename) {
     if (rule_manager_) {
         return rule_manager_->loadRules(filename);
@@ -466,6 +581,166 @@ std::string DPIEngine::generateClassificationReport() const {
         return fp_manager_->generateClassificationReport();
     }
     return "";
+}
+
+bool DPIEngine::writeJsonReport(const std::string& filename) const {
+    std::ofstream out(filename, std::ios::binary);
+    if (!out.is_open()) {
+        return false;
+    }
+
+    out << "{\n";
+    out << "  \"summary\": {\n";
+    out << "    \"totalPackets\": " << stats_.total_packets.load() << ",\n";
+    out << "    \"totalBytes\": " << stats_.total_bytes.load() << ",\n";
+    out << "    \"forwardedPackets\": " << stats_.forwarded_packets.load() << ",\n";
+    out << "    \"droppedPackets\": " << stats_.dropped_packets.load() << ",\n";
+    out << "    \"tcpPackets\": " << stats_.tcp_packets.load() << ",\n";
+    out << "    \"udpPackets\": " << stats_.udp_packets.load() << "\n";
+    out << "  }";
+
+    std::vector<std::pair<uint32_t, uint64_t>> top_src_ips;
+    std::vector<std::pair<uint32_t, uint64_t>> top_dst_ips;
+    std::vector<std::pair<uint16_t, uint64_t>> top_src_ports;
+    std::vector<std::pair<uint16_t, uint64_t>> top_dst_ports;
+    std::vector<std::pair<uint8_t, uint64_t>> top_protocols;
+    std::vector<DNSQueryAnalytics> top_dns_queries;
+    {
+        std::lock_guard<std::mutex> lock(analytics_mutex_);
+        top_src_ips = topEntries(analytics_.src_ip_counts);
+        top_dst_ips = topEntries(analytics_.dst_ip_counts);
+        top_src_ports = topEntries(analytics_.src_port_counts);
+        top_dst_ports = topEntries(analytics_.dst_port_counts);
+        top_protocols = topEntries(analytics_.protocol_counts);
+        for (const auto& pair : analytics_.dns_queries) {
+            top_dns_queries.push_back(pair.second);
+        }
+    }
+    std::sort(top_dns_queries.begin(), top_dns_queries.end(),
+              [](const auto& a, const auto& b) { return a.count > b.count; });
+    if (top_dns_queries.size() > 20) {
+        top_dns_queries.resize(20);
+    }
+
+    if (fp_manager_) {
+        auto summary = fp_manager_->getClassificationSummary();
+        out << ",\n  \"classification\": {\n";
+        out << "    \"totalConnections\": " << summary.total_connections << ",\n";
+        out << "    \"classifiedConnections\": " << summary.total_classified << ",\n";
+        out << "    \"unknownConnections\": " << summary.total_unknown << "\n";
+        out << "  },\n";
+
+        out << "  \"apps\": [\n";
+        for (size_t i = 0; i < summary.app_counts.size(); ++i) {
+            const auto& entry = summary.app_counts[i];
+            double pct = summary.total_connections > 0
+                ? (100.0 * static_cast<double>(entry.second) / static_cast<double>(summary.total_connections))
+                : 0.0;
+            out << "    {\"name\": \"" << jsonEscape(appTypeToString(entry.first))
+                << "\", \"count\": " << entry.second
+                << ", \"percent\": " << std::fixed << std::setprecision(2) << pct << "}";
+            if (i + 1 < summary.app_counts.size()) {
+                out << ",";
+            }
+            out << "\n";
+        }
+        out << "  ],\n";
+
+        out << "  \"domains\": [\n";
+        for (size_t i = 0; i < summary.domain_counts.size(); ++i) {
+            const auto& entry = summary.domain_counts[i];
+            out << "    {\"domain\": \"" << jsonEscape(entry.first)
+                << "\", \"count\": " << entry.second << "}";
+            if (i + 1 < summary.domain_counts.size()) {
+                out << ",";
+            }
+            out << "\n";
+        }
+        out << "  ],\n";
+
+        out << "  \"blockedReasons\": [\n";
+        for (size_t i = 0; i < summary.blocked_reason_counts.size(); ++i) {
+            const auto& entry = summary.blocked_reason_counts[i];
+            out << "    {\"reason\": \"" << jsonEscape(entry.first)
+                << "\", \"count\": " << entry.second << "}";
+            if (i + 1 < summary.blocked_reason_counts.size()) {
+                out << ",";
+            }
+            out << "\n";
+        }
+        out << "  ],\n";
+    } else {
+        out << ",\n  \"classification\": {\n";
+        out << "    \"totalConnections\": 0,\n";
+        out << "    \"classifiedConnections\": 0,\n";
+        out << "    \"unknownConnections\": 0\n";
+        out << "  },\n";
+        out << "  \"apps\": [],\n";
+        out << "  \"domains\": [],\n";
+        out << "  \"blockedReasons\": [],\n";
+    }
+
+    out << "  \"traffic\": {\n";
+
+    out << "    \"topSourceIps\": [\n";
+    for (size_t i = 0; i < top_src_ips.size(); ++i) {
+        out << "      {\"ip\": \"" << ipToString(top_src_ips[i].first) << "\", \"count\": " << top_src_ips[i].second << "}";
+        if (i + 1 < top_src_ips.size()) out << ",";
+        out << "\n";
+    }
+    out << "    ],\n";
+
+    out << "    \"topDestinationIps\": [\n";
+    for (size_t i = 0; i < top_dst_ips.size(); ++i) {
+        out << "      {\"ip\": \"" << ipToString(top_dst_ips[i].first) << "\", \"count\": " << top_dst_ips[i].second << "}";
+        if (i + 1 < top_dst_ips.size()) out << ",";
+        out << "\n";
+    }
+    out << "    ],\n";
+
+    out << "    \"topSourcePorts\": [\n";
+    for (size_t i = 0; i < top_src_ports.size(); ++i) {
+        out << "      {\"port\": " << top_src_ports[i].first << ", \"count\": " << top_src_ports[i].second << "}";
+        if (i + 1 < top_src_ports.size()) out << ",";
+        out << "\n";
+    }
+    out << "    ],\n";
+
+    out << "    \"topDestinationPorts\": [\n";
+    for (size_t i = 0; i < top_dst_ports.size(); ++i) {
+        out << "      {\"port\": " << top_dst_ports[i].first << ", \"count\": " << top_dst_ports[i].second << "}";
+        if (i + 1 < top_dst_ports.size()) out << ",";
+        out << "\n";
+    }
+    out << "    ],\n";
+
+    out << "    \"topProtocols\": [\n";
+    for (size_t i = 0; i < top_protocols.size(); ++i) {
+        out << "      {\"protocol\": \"" << protocolToString(top_protocols[i].first)
+            << "\", \"number\": " << static_cast<int>(top_protocols[i].first)
+            << ", \"count\": " << top_protocols[i].second << "}";
+        if (i + 1 < top_protocols.size()) out << ",";
+        out << "\n";
+    }
+    out << "    ],\n";
+
+    out << "    \"dnsQueries\": [\n";
+    for (size_t i = 0; i < top_dns_queries.size(); ++i) {
+        const auto& entry = top_dns_queries[i];
+        out << "      {\"domain\": \"" << jsonEscape(entry.domain)
+            << "\", \"sourceIp\": \"" << ipToString(entry.source_ip)
+            << "\", \"dnsServer\": \"" << ipToString(entry.dns_server_ip)
+            << "\", \"count\": " << entry.count
+            << ", \"blockedCount\": " << entry.blocked_count << "}";
+        if (i + 1 < top_dns_queries.size()) out << ",";
+        out << "\n";
+    }
+    out << "    ]\n";
+
+    out << "  }\n";
+
+    out << "}\n";
+    return out.good();
 }
 
 const DPIStats& DPIEngine::getStats() const {

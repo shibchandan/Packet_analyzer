@@ -13,6 +13,7 @@
 #include <atomic>
 #include <fstream>
 #include <mutex>
+#include <unordered_map>
 
 namespace DPI {
 
@@ -103,6 +104,11 @@ public:
     
     // Unblock a domain
     void unblockDomain(const std::string& domain);
+
+    // Block a protocol family
+    void blockProtocol(const std::string& protocol_name);
+
+    void unblockProtocol(const std::string& protocol_name);
     
     // Load rules from file
     bool loadRules(const std::string& filename);
@@ -117,6 +123,9 @@ public:
     
     // Generate classification report (app distribution)
     std::string generateClassificationReport() const;
+
+    // Write a structured JSON report for dashboards and APIs
+    bool writeJsonReport(const std::string& filename) const;
     
     // Get real-time statistics
     const DPIStats& getStats() const;
@@ -131,6 +140,23 @@ public:
     bool isRunning() const { return running_; }
 
 private:
+    struct DNSQueryAnalytics {
+        std::string domain;
+        uint32_t source_ip = 0;
+        uint32_t dns_server_ip = 0;
+        uint64_t count = 0;
+        uint64_t blocked_count = 0;
+    };
+
+    struct TrafficAnalytics {
+        std::unordered_map<uint32_t, uint64_t> src_ip_counts;
+        std::unordered_map<uint32_t, uint64_t> dst_ip_counts;
+        std::unordered_map<uint16_t, uint64_t> src_port_counts;
+        std::unordered_map<uint16_t, uint64_t> dst_port_counts;
+        std::unordered_map<uint8_t, uint64_t> protocol_counts;
+        std::unordered_map<std::string, DNSQueryAnalytics> dns_queries;
+    };
+
     Config config_;
     
     // Shared components
@@ -149,6 +175,8 @@ private:
     
     // Statistics
     DPIStats stats_;
+    TrafficAnalytics analytics_;
+    mutable std::mutex analytics_mutex_;
     
     // Control
     std::atomic<bool> running_{false};
@@ -174,6 +202,9 @@ private:
     PacketJob createPacketJob(const PacketAnalyzer::RawPacket& raw,
                                const PacketAnalyzer::ParsedPacket& parsed,
                                uint32_t packet_id);
+
+    void recordPacketAnalytics(const PacketJob& job);
+    void recordDnsAnalytics(const PacketJob& job, PacketAction action);
 };
 
 } // namespace DPI

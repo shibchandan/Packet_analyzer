@@ -3,6 +3,7 @@
 #include <iostream>
 #include <algorithm>
 #include <mutex>
+#include <cctype>
 
 namespace DPI {
 
@@ -203,12 +204,60 @@ bool RuleManager::isPortBlocked(uint16_t port) const {
 }
 
 // ============================================================================
+// Protocol Blocking
+// ============================================================================
+
+std::string RuleManager::normalizeProtocolName(const std::string& protocol_name) {
+    std::string normalized = protocol_name;
+    std::transform(normalized.begin(), normalized.end(), normalized.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
+    return normalized;
+}
+
+std::string RuleManager::detectProtocolName(uint8_t protocol, uint16_t dst_port, AppType app) {
+    if (protocol == 1) return "ICMP";
+    if (app == AppType::DNS || dst_port == 53) return "DNS";
+    if (app == AppType::HTTP || dst_port == 80) return "HTTP";
+    if (app == AppType::HTTPS || app == AppType::TLS || dst_port == 443) return "HTTPS";
+    if (dst_port == 502) return "MODBUS";
+    if (dst_port == 102) return "S7";
+    if (protocol == 6) return "TCP";
+    if (protocol == 17) return "UDP";
+    return "OTHER";
+}
+
+void RuleManager::blockProtocol(const std::string& protocol_name) {
+    const std::string normalized = normalizeProtocolName(protocol_name);
+    std::unique_lock<std::shared_mutex> lock(protocol_mutex_);
+    blocked_protocols_.insert(normalized);
+    std::cout << "[RuleManager] Blocked protocol: " << normalized << std::endl;
+}
+
+void RuleManager::unblockProtocol(const std::string& protocol_name) {
+    const std::string normalized = normalizeProtocolName(protocol_name);
+    std::unique_lock<std::shared_mutex> lock(protocol_mutex_);
+    blocked_protocols_.erase(normalized);
+}
+
+bool RuleManager::isProtocolBlocked(const std::string& protocol_name) const {
+    const std::string normalized = normalizeProtocolName(protocol_name);
+    std::shared_lock<std::shared_mutex> lock(protocol_mutex_);
+    return blocked_protocols_.count(normalized) > 0;
+}
+
+std::vector<std::string> RuleManager::getBlockedProtocols() const {
+    std::shared_lock<std::shared_mutex> lock(protocol_mutex_);
+    return std::vector<std::string>(blocked_protocols_.begin(), blocked_protocols_.end());
+}
+
+// ============================================================================
 // Combined Check
 // ============================================================================
 
 std::optional<RuleManager::BlockReason> RuleManager::shouldBlock(
     uint32_t src_ip,
     uint16_t dst_port,
+    uint8_t protocol,
     AppType app,
     const std::string& domain) const {
     
@@ -220,6 +269,11 @@ std::optional<RuleManager::BlockReason> RuleManager::shouldBlock(
     // Check port
     if (isPortBlocked(dst_port)) {
         return BlockReason{BlockReason::PORT, std::to_string(dst_port)};
+    }
+
+    const std::string protocol_name = detectProtocolName(protocol, dst_port, app);
+    if (isProtocolBlocked(protocol_name)) {
+        return BlockReason{BlockReason::PROTOCOL, protocol_name};
     }
     
     // Check app
@@ -271,6 +325,11 @@ bool RuleManager::saveRules(const std::string& filename) const {
             file << port << "\n";
         }
     }
+
+    file << "\n[BLOCKED_PROTOCOLS]\n";
+    for (const auto& protocol : getBlockedProtocols()) {
+        file << protocol << "\n";
+    }
     
     file.close();
     std::cout << "[RuleManager] Rules saved to: " << filename << std::endl;
@@ -311,6 +370,8 @@ bool RuleManager::loadRules(const std::string& filename) {
             blockDomain(line);
         } else if (current_section == "[BLOCKED_PORTS]") {
             blockPort(static_cast<uint16_t>(std::stoi(line)));
+        } else if (current_section == "[BLOCKED_PROTOCOLS]") {
+            blockProtocol(line);
         }
     }
     
@@ -337,6 +398,10 @@ void RuleManager::clearAll() {
         std::unique_lock<std::shared_mutex> lock(port_mutex_);
         blocked_ports_.clear();
     }
+    {
+        std::unique_lock<std::shared_mutex> lock(protocol_mutex_);
+        blocked_protocols_.clear();
+    }
     std::cout << "[RuleManager] All rules cleared" << std::endl;
 }
 
@@ -358,6 +423,10 @@ RuleManager::RuleStats RuleManager::getStats() const {
     {
         std::shared_lock<std::shared_mutex> lock(port_mutex_);
         stats.blocked_ports = blocked_ports_.size();
+    }
+    {
+        std::shared_lock<std::shared_mutex> lock(protocol_mutex_);
+        stats.blocked_protocols = blocked_protocols_.size();
     }
     
     return stats;

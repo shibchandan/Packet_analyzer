@@ -1,0 +1,11 @@
+﻿backend/.venv/
+backend/data/
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+server/node_modules/
+server/data/
+client/node_modules/
+client/dist/
+*.pyc
+__pycache__/

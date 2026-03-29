@@ -22,6 +22,7 @@ namespace DPI {
 // 2. App-based: Block specific applications (detected via SNI)
 // 3. Domain-based: Block specific domains
 // 4. Port-based: Block specific destination ports
+// 5. Protocol-based: Block protocol families like DNS, ICMP, HTTP, MODBUS, S7
 //
 // Rules are thread-safe for concurrent access from FP threads
 // ============================================================================
@@ -85,19 +86,27 @@ public:
     
     // Check if port is blocked
     bool isPortBlocked(uint16_t port) const;
+
+    // ========== Protocol Blocking ==========
+
+    void blockProtocol(const std::string& protocol_name);
+    void unblockProtocol(const std::string& protocol_name);
+    bool isProtocolBlocked(const std::string& protocol_name) const;
+    std::vector<std::string> getBlockedProtocols() const;
     
     // ========== Combined Check ==========
     
     // Check if a packet/connection should be blocked based on all rules
     // Returns the reason if blocked, nullopt if allowed
     struct BlockReason {
-        enum Type { IP, APP, DOMAIN, PORT } type;
+        enum Type { IP, APP, DOMAIN, PORT, PROTOCOL } type;
         std::string detail;
     };
     
     std::optional<BlockReason> shouldBlock(
         uint32_t src_ip,
         uint16_t dst_port,
+        uint8_t protocol,
         AppType app,
         const std::string& domain) const;
     
@@ -119,6 +128,7 @@ public:
         size_t blocked_apps;
         size_t blocked_domains;
         size_t blocked_ports;
+        size_t blocked_protocols;
     };
     
     RuleStats getStats() const;
@@ -137,6 +147,9 @@ private:
     
     mutable std::shared_mutex port_mutex_;
     std::unordered_set<uint16_t> blocked_ports_;
+
+    mutable std::shared_mutex protocol_mutex_;
+    std::unordered_set<std::string> blocked_protocols_;
     
     // Helper: Convert IP string to uint32
     static uint32_t parseIP(const std::string& ip);
@@ -146,6 +159,9 @@ private:
     
     // Helper: Check if domain matches pattern (supports wildcards)
     static bool domainMatchesPattern(const std::string& domain, const std::string& pattern);
+
+    static std::string normalizeProtocolName(const std::string& protocol_name);
+    static std::string detectProtocolName(uint8_t protocol, uint16_t dst_port, AppType app);
 };
 
 } // namespace DPI

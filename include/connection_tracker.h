@@ -42,7 +42,7 @@ public:
     void classifyConnection(Connection* conn, AppType app, const std::string& sni);
     
     // Mark connection as blocked
-    void blockConnection(Connection* conn);
+    void blockConnection(Connection* conn, const std::string& reason_type, const std::string& reason_detail);
     
     // Mark connection as closed
     void closeConnection(const FiveTuple& tuple);

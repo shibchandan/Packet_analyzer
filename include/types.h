@@ -8,6 +8,7 @@
 #include <vector>
 #include <atomic>
 #include <optional>
+#include <string>
 
 namespace DPI {
 
@@ -115,6 +116,8 @@ struct Connection {
     ConnectionState state = ConnectionState::NEW;
     AppType app_type = AppType::UNKNOWN;
     std::string sni;  // Server Name Indication (if detected)
+    std::string blocked_reason_type;
+    std::string blocked_reason_detail;
     
     uint64_t packets_in = 0;
     uint64_t packets_out = 0;

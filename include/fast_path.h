@@ -168,8 +168,19 @@ public:
         uint64_t total_dropped;
         uint64_t total_connections;
     };
+
+    struct ClassificationSummary {
+        uint64_t total_connections = 0;
+        uint64_t total_classified = 0;
+        uint64_t total_unknown = 0;
+        std::vector<std::pair<AppType, size_t>> app_counts;
+        std::vector<std::pair<std::string, size_t>> domain_counts;
+        std::vector<std::pair<std::string, size_t>> blocked_reason_counts;
+    };
     
     AggregatedStats getAggregatedStats() const;
+
+    ClassificationSummary getClassificationSummary() const;
     
     // Generate classification report
     std::string generateClassificationReport() const;

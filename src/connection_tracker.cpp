@@ -79,11 +79,13 @@ void ConnectionTracker::classifyConnection(Connection* conn, AppType app, const 
     }
 }
 
-void ConnectionTracker::blockConnection(Connection* conn) {
+void ConnectionTracker::blockConnection(Connection* conn, const std::string& reason_type, const std::string& reason_detail) {
     if (!conn) return;
     
     conn->state = ConnectionState::BLOCKED;
     conn->action = PacketAction::DROP;
+    conn->blocked_reason_type = reason_type;
+    conn->blocked_reason_detail = reason_detail;
     blocked_count_++;
 }
 
