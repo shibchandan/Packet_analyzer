@@ -321,7 +321,7 @@ What each piece does:
 
 ```text
 frontend/
-  src/
+  engine/src/
     api/
       client.ts
       jobs.ts
@@ -479,3 +479,4 @@ For the UI demo, focus on these 4 things:
 - a visible blocked vs forwarded traffic story
 
 That will make the project feel like a real security product, not just a CLI tool with a wrapper.
+

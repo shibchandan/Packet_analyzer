@@ -78,12 +78,12 @@ This guide will help you build and run the DPI Engine on Windows. Follow these s
 ```cmd
 cd packet_analyzer
 
-cl /EHsc /std:c++17 /O2 /I include /Fe:dpi_engine.exe ^
-    src\dpi_mt.cpp ^
-    src\pcap_reader.cpp ^
-    src\packet_parser.cpp ^
-    src\sni_extractor.cpp ^
-    src\types.cpp
+cl /EHsc /std:c++17 /O2 /I engine\\include /Fe:dpi_engine.exe ^
+    engine\\src\\dpi_mt.cpp ^
+    engine\\src\\pcap_reader.cpp ^
+    engine\\src\\packet_parser.cpp ^
+    engine\\src\\sni_extractor.cpp ^
+    engine\\src\\types.cpp
 ```
 
 3. If successful, you'll see `dpi_engine.exe` in the folder
@@ -153,12 +153,12 @@ pacman -S mingw-w64-x86_64-gcc mingw-w64-x86_64-make
 
 3. Build:
    ```cmd
-   g++ -std=c++17 -O2 -I include -o dpi_engine.exe ^
-       src/dpi_mt.cpp ^
-       src/pcap_reader.cpp ^
-       src/packet_parser.cpp ^
-       src/sni_extractor.cpp ^
-       src/types.cpp
+   g++ -std=c++17 -O2 -I engine/include -o dpi_engine.exe ^
+       engine/src/dpi_mt.cpp ^
+       engine/src/pcap_reader.cpp ^
+       engine/src/packet_parser.cpp ^
+       engine/src/sni_extractor.cpp ^
+       engine/src/types.cpp
    ```
 
 4. If successful, you'll see `dpi_engine.exe`
@@ -212,12 +212,12 @@ cd /mnt/c/Users/YourName/Downloads/packet_analyzer
 ### Step 4: Build
 
 ```bash
-g++ -std=c++17 -pthread -O2 -I include -o dpi_engine \
-    src/dpi_mt.cpp \
-    src/pcap_reader.cpp \
-    src/packet_parser.cpp \
-    src/sni_extractor.cpp \
-    src/types.cpp
+g++ -std=c++17 -pthread -O2 -I engine/include -o dpi_engine \
+    engine/src/dpi_mt.cpp \
+    engine/src/pcap_reader.cpp \
+    engine/src/packet_parser.cpp \
+    engine/src/sni_extractor.cpp \
+    engine/src/types.cpp
 ```
 
 ### Step 5: Run
@@ -273,11 +273,11 @@ Follow **Option 2** above to install MinGW-w64, then continue here.
                 "-O2",
                 "-I", "include",
                 "-o", "dpi_engine.exe",
-                "src/dpi_mt.cpp",
-                "src/pcap_reader.cpp",
-                "src/packet_parser.cpp",
-                "src/sni_extractor.cpp",
-                "src/types.cpp"
+                "engine/src/dpi_mt.cpp",
+                "engine/src/pcap_reader.cpp",
+                "engine/src/packet_parser.cpp",
+                "engine/src/sni_extractor.cpp",
+                "engine/src/types.cpp"
             ],
             "group": {
                 "kind": "build",
@@ -334,7 +334,7 @@ Open terminal in VS Code (`Ctrl+``) and run:
 Make sure you're in the `packet_analyzer` folder:
 ```cmd
 cd C:\full\path\to\packet_analyzer
-dir include
+dir engine\\include
 ```
 You should see the .h files listed.
 
@@ -344,7 +344,7 @@ You should see the .h files listed.
 
 **Fix:** Add `-pthread` flag:
 ```cmd
-g++ -std=c++17 -pthread -O2 -I include -o dpi_engine.exe ...
+g++ -std=c++17 -pthread -O2 -I engine/include -o dpi_engine.exe ...
 ```
 
 ### Program runs but crashes immediately
@@ -382,9 +382,9 @@ python generate_test_pcap.py
 
 | Method | Command |
 |--------|---------|
-| **Visual Studio (cl)** | `cl /EHsc /std:c++17 /O2 /I include /Fe:dpi_engine.exe src\dpi_mt.cpp src\pcap_reader.cpp src\packet_parser.cpp src\sni_extractor.cpp src\types.cpp` |
-| **MinGW (g++)** | `g++ -std=c++17 -O2 -I include -o dpi_engine.exe src/dpi_mt.cpp src/pcap_reader.cpp src/packet_parser.cpp src/sni_extractor.cpp src/types.cpp` |
-| **WSL/Linux** | `g++ -std=c++17 -pthread -O2 -I include -o dpi_engine src/dpi_mt.cpp src/pcap_reader.cpp src/packet_parser.cpp src/sni_extractor.cpp src/types.cpp` |
+| **Visual Studio (cl)** | `cl /EHsc /std:c++17 /O2 /I engine\\include /Fe:dpi_engine.exe engine\\src\\dpi_mt.cpp engine\\src\\pcap_reader.cpp engine\\src\\packet_parser.cpp engine\\src\\sni_extractor.cpp engine\\src\\types.cpp` |
+| **MinGW (g++)** | `g++ -std=c++17 -O2 -I engine/include -o dpi_engine.exe engine/src/dpi_mt.cpp engine/src/pcap_reader.cpp engine/src/packet_parser.cpp engine/src/sni_extractor.cpp engine/src/types.cpp` |
+| **WSL/Linux** | `g++ -std=c++17 -pthread -O2 -I engine/include -o dpi_engine engine/src/dpi_mt.cpp engine/src/pcap_reader.cpp engine/src/packet_parser.cpp engine/src/sni_extractor.cpp engine/src/types.cpp` |
 
 ### Run Commands
 
@@ -436,3 +436,4 @@ If you're stuck:
 4. Google the exact error message
 
 Good luck! 
+

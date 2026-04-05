@@ -29,8 +29,8 @@ flowchart LR
 
 ```text
 Packet_analyzer/
-|-- include/              C++ headers
-|-- src/                  C++ engine sources
+|-- engine/include/       C++ headers
+|-- engine/src/           C++ engine sources
 |-- dpi_engine.exe        Built analyzer executable
 |-- client/               React + Vite dashboard
 |-- server/               Express + Mongo API
@@ -215,3 +215,4 @@ Built a multithreaded Deep Packet Inspection engine in C++ for offline PCAP anal
 ## Deep Technical Walkthrough
 
 The original long-form explanation for packet flow, SNI extraction, multithreading, and code structure is preserved in [PROJECT_DEEP_DIVE.md](./PROJECT_DEEP_DIVE.md).
+

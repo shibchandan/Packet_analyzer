@@ -1,4 +1,4 @@
-﻿# MERN Dashboard Setup
+# MERN Dashboard Setup
 
 This repo now includes a MERN-style dashboard scaffold around your C++ DPI engine.
 
@@ -45,4 +45,5 @@ npm run dev
 
 ## Best Next Improvement
 
-Add a JSON report flag to the C++ engine, for example `--report-json report.json`, so the MERN app can render richer and more reliable analytics.
+The C++ engine now lives under `engine/src` and `engine/include`, while `dpi_engine.exe` remains the worker binary at the repo root.
+

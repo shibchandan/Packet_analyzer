@@ -138,8 +138,8 @@ TLS Client Hello:
 
 | Version | File | Use Case |
 |---------|------|----------|
-| Simple (Single-threaded) | `src/main_working.cpp` | Learning, small captures |
-| Multi-threaded | `src/dpi_mt.cpp` | Production, large captures |
+| Simple (Single-threaded) | `engine/src/main_working.cpp` | Learning, small captures |
+| Multi-threaded | `engine/src/dpi_mt.cpp` | Production, large captures |
 
 ---
 
@@ -147,7 +147,7 @@ TLS Client Hello:
 
 ```
 packet_analyzer/
-+-- include/                    # Header files (declarations)
++-- engine/include/                    # Header files (declarations)
 ¦   +-- pcap_reader.h          # PCAP file reading
 ¦   +-- packet_parser.h        # Network protocol parsing
 ¦   +-- sni_extractor.h        # TLS/HTTP inspection
@@ -159,7 +159,7 @@ packet_analyzer/
 ¦   +-- thread_safe_queue.h    # Thread-safe queue
 ¦   +-- dpi_engine.h           # Main orchestrator
 ¦
-+-- src/                        # Implementation files
++-- engine/src/                        # Implementation files
 ¦   +-- pcap_reader.cpp        # PCAP file handling
 ¦   +-- packet_parser.cpp      # Protocol parsing
 ¦   +-- sni_extractor.cpp      # SNI/Host extraction
@@ -177,7 +177,7 @@ packet_analyzer/
 
 ## 5. The Journey of a Packet (Simple Version)
 
-Let's trace a single packet through `main_working.cpp`:
+Let's trace a single packet through `engine/src/main_working.cpp`:
 
 ### Step 1: Read PCAP File
 
@@ -392,7 +392,7 @@ for (const auto& [tuple, flow] : flows) {
 
 ## 6. The Journey of a Packet (Multi-threaded Version)
 
-The multi-threaded version (`dpi_mt.cpp`) adds **parallelism** for high performance:
+The multi-threaded version (`engine/src/dpi_mt.cpp`) adds **parallelism** for high performance:
 
 ### Architecture Overview
 
@@ -874,22 +874,22 @@ Connection to YouTube:
 
 **Simple Version:**
 ```bash
-g++ -std=c++17 -O2 -I include -o dpi_simple \
-    src/main_working.cpp \
-    src/pcap_reader.cpp \
-    src/packet_parser.cpp \
-    src/sni_extractor.cpp \
-    src/types.cpp
+g++ -std=c++17 -O2 -I engine/include -o dpi_simple \
+    engine/src/main_working.cpp \
+    engine/src/pcap_reader.cpp \
+    engine/src/packet_parser.cpp \
+    engine/src/sni_extractor.cpp \
+    engine/src/types.cpp
 ```
 
 **Multi-threaded Version:**
 ```bash
-g++ -std=c++17 -pthread -O2 -I include -o dpi_engine \
-    src/dpi_mt.cpp \
-    src/pcap_reader.cpp \
-    src/packet_parser.cpp \
-    src/sni_extractor.cpp \
-    src/types.cpp
+g++ -std=c++17 -pthread -O2 -I engine/include -o dpi_engine \
+    engine/src/dpi_mt.cpp \
+    engine/src/pcap_reader.cpp \
+    engine/src/packet_parser.cpp \
+    engine/src/sni_extractor.cpp \
+    engine/src/types.cpp
 ```
 
 ### Running
@@ -1053,6 +1053,8 @@ The key insight is that even HTTPS traffic leaks the destination domain in the T
 
 ## Questions?
 
-If you have questions about any part of this project, the code is well-commented and follows the same flow described in this document. Start with the simple version (`main_working.cpp`) to understand the concepts, then move to the multi-threaded version (`dpi_mt.cpp`) to see how parallelism is added.
+If you have questions about any part of this project, the code is well-commented and follows the same flow described in this document. Start with the simple version (`engine/src/main_working.cpp`) to understand the concepts, then move to the multi-threaded version (`engine/src/dpi_mt.cpp`) to see how parallelism is added.
 
 Happy learning! ??
+
+

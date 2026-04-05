@@ -7,13 +7,13 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Source files
 set(SOURCES
-    src/main.cpp
-    src/pcap_reader.cpp
-    src/packet_parser.cpp
+    engine/src/main.cpp
+    engine/src/pcap_reader.cpp
+    engine/src/packet_parser.cpp
 )
 
 # Header files location
-include_directories(${CMAKE_SOURCE_DIR}/include)
+include_directories(${CMAKE_SOURCE_DIR}/engine/include)
 
 # Create the executable
 add_executable(packet_analyzer ${SOURCES})
