@@ -4,7 +4,7 @@ import { Router } from "express";
 import multer from "multer";
 
 import { Job } from "../models/Job.js";
-import { buildJobPaths, runJob } from "../services/engineService.js";
+import { buildJobPaths, runJob, stopJob } from "../services/engineService.js";
 import { config } from "../config.js";
 
 
@@ -58,29 +58,35 @@ jobsRouter.get("/", async (_req, res) => {
 });
 
 jobsRouter.post("/", upload.single("file"), async (req, res) => {
-  if (!req.file) {
-    res.status(400).json({ message: "PCAP file is required" });
+  const isLive = req.body.liveMode === "true";
+  
+  if (!isLive && !req.file) {
+    res.status(400).json({ message: "PCAP file is required for offline mode" });
     return;
   }
 
-  const outputName = req.body.outputName || "filtered_output.pcap";
-  const paths = buildJobPaths(req.file.originalname, outputName);
+  const outputName = req.body.outputName || (isLive ? "live_intercept.pcap" : "filtered_output.pcap");
+  const fileName = isLive ? "live_capture" : req.file.originalname;
+  const paths = buildJobPaths(fileName, outputName);
   
-  // Rename from temporary multer filename to our structured filename
-  fs.renameSync(req.file.path, paths.uploadPath);
+  // Rename from temporary multer filename to our structured filename if offline
+  if (!isLive && req.file) {
+    fs.renameSync(req.file.path, paths.uploadPath);
+  }
   
   // Clamp thread allocations to prevent DoS
   const clampedLbs = Math.max(1, Math.min(16, Number(req.body.loadBalancers || 2)));
   const clampedFps = Math.max(1, Math.min(32, Number(req.body.fpsPerLb || 2)));
 
   const job = await Job.create({
-    inputName: req.file.originalname,
-    inputPath: paths.uploadPath,
+    inputName: fileName,
+    inputPath: isLive ? "" : paths.uploadPath,
     outputName,
-    outputPath: paths.outputPath,
+    outputPath: isLive ? "" : paths.outputPath,
     reportPath: paths.reportPath,
     logPath: paths.logPath,
     status: "queued",
+    liveMode: isLive,
     blockApps: splitCsv(req.body.blockApps),
     blockDomains: splitCsv(req.body.blockDomains),
     blockIps: splitCsv(req.body.blockIps),
@@ -132,4 +138,22 @@ jobsRouter.get("/:id/download", async (req, res) => {
     return;
   }
   res.download(job.outputPath, job.outputName);
+});
+
+jobsRouter.post("/:id/stop", async (req, res) => {
+  const job = await Job.findById(req.params.id);
+  if (!job) {
+    res.status(404).json({ message: "Job not found" });
+    return;
+  }
+  if (job.status !== "running") {
+    res.status(400).json({ message: "Job is not running" });
+    return;
+  }
+  
+  if (stopJob(job._id.toString())) {
+    res.json({ message: "Job stopped successfully" });
+  } else {
+    res.status(500).json({ message: "Failed to stop job" });
+  }
 });

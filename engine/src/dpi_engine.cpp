@@ -160,6 +160,11 @@ void DPIEngine::stop() {
         output_thread_.join();
     }
     
+    // Stop live reader if running
+    if (live_reader_) {
+        live_reader_->close();
+    }
+    
     std::cout << "[DPIEngine] All threads stopped\n";
 }
 
@@ -174,6 +179,73 @@ void DPIEngine::waitForCompletion() {
     
     // Signal completion
     processing_complete_ = true;
+}
+
+bool DPIEngine::runLive() {
+    std::cout << "\n[DPIEngine] Starting LIVE INTERCEPTION MODE with WinDivert\n\n";
+
+    {
+        std::lock_guard<std::mutex> lock(analytics_mutex_);
+        analytics_ = TrafficAnalytics{};
+    }
+    
+    if (!rule_manager_) {
+        if (!initialize()) {
+            return false;
+        }
+    }
+    
+    live_reader_ = std::make_unique<PacketAnalyzer::WinDivertReader>();
+    if (!live_reader_->open("true")) {
+        return false;
+    }
+    
+    start();
+    
+    reader_thread_ = std::thread([this]() {
+        PacketAnalyzer::RawPacket raw;
+        PacketAnalyzer::ParsedPacket parsed;
+        uint32_t packet_id = 0;
+        
+        std::cout << "[Reader] Starting live packet interception...\n";
+        
+        while (running_ && live_reader_->readNextPacket(raw)) {
+            // Parse the packet
+            if (!PacketAnalyzer::PacketParser::parse(raw, parsed)) {
+                live_reader_->sendPacket(raw); // Reinject unparseable
+                continue;
+            }
+            
+            // Only process IP packets with TCP/UDP
+            if (!parsed.has_ip || (!parsed.has_tcp && !parsed.has_udp)) {
+                live_reader_->sendPacket(raw); // Reinject non-IP
+                continue;
+            }
+            
+            // Create packet job
+            PacketJob job = createPacketJob(raw, parsed, packet_id++);
+            job.windivert_addr_bytes = raw.windivert_addr_bytes;
+            
+            // Update global stats
+            stats_.total_packets++;
+            stats_.total_bytes += raw.data.size();
+            recordPacketAnalytics(job);
+            
+            if (parsed.has_tcp) {
+                stats_.tcp_packets++;
+            } else if (parsed.has_udp) {
+                stats_.udp_packets++;
+            }
+            
+            // Send to appropriate LB based on hash
+            LoadBalancer& lb = lb_manager_->getLBForPacket(job.tuple);
+            lb.getInputQueue().push(std::move(job));
+        }
+        
+        std::cout << "[Reader] Live interception stopped\n";
+    });
+    
+    return true;
 }
 
 bool DPIEngine::processFile(const std::string& input_file,
@@ -359,7 +431,14 @@ void DPIEngine::outputThreadFunc() {
         auto job_opt = output_queue_.popWithTimeout(std::chrono::milliseconds(100));
         
         if (job_opt) {
-            writeOutputPacket(*job_opt);
+            if (config_.live_mode && live_reader_ && live_reader_->isOpen()) {
+                PacketAnalyzer::RawPacket raw;
+                raw.data = job_opt->data;
+                raw.windivert_addr_bytes = job_opt->windivert_addr_bytes;
+                live_reader_->sendPacket(raw);
+            } else if (!config_.live_mode) {
+                writeOutputPacket(*job_opt);
+            }
         }
     }
 }

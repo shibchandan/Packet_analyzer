@@ -15,8 +15,14 @@ set(SOURCES
 # Header files location
 include_directories(${CMAKE_SOURCE_DIR}/engine/include)
 
+# Find WinDivert library
+set(WINDIVERT_LIB ${CMAKE_SOURCE_DIR}/engine/lib/WinDivert.lib)
+
 # Create the executable
 add_executable(packet_analyzer ${SOURCES})
+
+# Link WinDivert
+target_link_libraries(packet_analyzer ${WINDIVERT_LIB} ws2_32)
 
 # For macOS, we might need to link against system libraries later
 if(APPLE)

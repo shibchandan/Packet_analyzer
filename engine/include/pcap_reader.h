@@ -33,6 +33,7 @@ struct PcapPacketHeader {
 struct RawPacket {
     PcapPacketHeader header;
     std::vector<uint8_t> data;  // The actual packet bytes
+    std::vector<uint8_t> windivert_addr_bytes; // Opaque WinDivert address
 };
 
 // Class to read PCAP files

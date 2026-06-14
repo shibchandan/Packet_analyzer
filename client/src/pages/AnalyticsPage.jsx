@@ -1,37 +1,54 @@
 import { useEffect, useState } from "react";
-import { fetchJobs } from "../api";
+import { fetchAggregateAnalytics } from "../api";
+
+function AnalyticsTable({ title, subtitle, columns, rows, emptyText }) {
+  return (
+    <section className="panel">
+      <div className="section-header">
+        <div>
+          <p className="eyebrow">{subtitle}</p>
+          <h2>{title}</h2>
+        </div>
+      </div>
+      {rows?.length ? (
+        <table className="data-table">
+          <thead>
+            <tr>
+              {columns.map((column) => <th key={column.key}>{column.label}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, index) => (
+              <tr key={`${title}-${index}`}>
+                {columns.map((column) => <td key={column.key}>{row[column.key]}</td>)}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : <p className="muted">{emptyText}</p>}
+    </section>
+  );
+}
 
 export default function AnalyticsPage() {
-  const [jobs, setJobs] = useState([]);
+  const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchJobs()
+    fetchAggregateAnalytics()
       .then((payload) => {
-        setJobs(payload.jobs || []);
+        setData(payload);
         setLoading(false);
       })
       .catch(() => setLoading(false));
   }, []);
 
-  if (loading) return <div className="page"><p>Loading analytics...</p></div>;
+  if (loading || !data) return <div className="page"><p>Loading analytics...</p></div>;
 
-  const totalPackets = jobs.reduce((acc, job) => acc + (job.summary?.totalPackets || 0), 0);
-  const totalDropped = jobs.reduce((acc, job) => acc + (job.summary?.droppedPackets || 0), 0);
-  const totalForwarded = totalPackets - totalDropped;
+  const totalPackets = data.summary?.totalPackets || 0;
+  const totalDropped = data.summary?.totalDropped || 0;
+  const totalForwarded = data.summary?.totalForwarded || 0;
   const dropPercent = totalPackets > 0 ? ((totalDropped / totalPackets) * 100).toFixed(1) : 0;
-  
-  // Aggregate apps
-  const appCounts = {};
-  jobs.forEach(job => {
-    (job.apps || []).forEach(app => {
-      appCounts[app.name] = (appCounts[app.name] || 0) + (app.count || 0);
-    });
-  });
-  const topApps = Object.entries(appCounts)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 5)
-    .map(([name, count]) => ({ name, count }));
 
   return (
     <div className="page">
@@ -60,24 +77,42 @@ export default function AnalyticsPage() {
              </div>
           </div>
         </section>
-
-        <section className="panel" style={{ gridColumn: 'span 2' }}>
-          <div className="section-header"><div><p className="eyebrow">Traffic Distribution</p><h2>Top Applications</h2></div></div>
-          {topApps.length === 0 ? <p className="muted">No application data available yet.</p> : (
-            <table className="data-table">
-              <thead><tr><th>Application</th><th>Aggregated Count</th></tr></thead>
-              <tbody>
-                {topApps.map((app) => (
-                  <tr key={app.name}>
-                    <td>{app.name}</td>
-                    <td>{app.count.toLocaleString()}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </section>
       </div>
+
+      <AnalyticsTable
+        title="Top Applications (SNI)"
+        subtitle="Layer 7 Visibility"
+        columns={[{ key: "name", label: "Application" }, { key: "count", label: "Connections" }]}
+        rows={data.topApps}
+        emptyText="No application data available yet."
+      />
+
+      <section className="stats-grid two-up">
+        <AnalyticsTable
+          title="Top Blocked Domains"
+          subtitle="Security Metrics"
+          columns={[{ key: "name", label: "Domain" }, { key: "count", label: "Blocks" }]}
+          rows={data.topDomains}
+          emptyText="No blocked domains recorded."
+        />
+
+        <AnalyticsTable
+          title="Top Blocked Reasons"
+          subtitle="Security Metrics"
+          columns={[{ key: "name", label: "Reason" }, { key: "count", label: "Occurrences" }]}
+          rows={data.topBlockedReasons}
+          emptyText="No blocked reasons recorded."
+        />
+      </section>
+
+      <AnalyticsTable
+        title="Top DNS Queries"
+        subtitle="Network Infrastructure"
+        columns={[{ key: "name", label: "Domain" }, { key: "count", label: "Query Count" }]}
+        rows={data.topDnsQueries}
+        emptyText="No DNS query data available."
+      />
+
     </div>
   );
 }

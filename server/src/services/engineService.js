@@ -1,8 +1,10 @@
-﻿import fs from "fs";
+import fs from "fs";
 import path from "path";
 import { spawn } from "child_process";
 
 import { config } from "../config.js";
+
+const runningJobs = new Map();
 
 
 function parseMetric(stdout, label) {
@@ -51,16 +53,23 @@ export function parseEngineOutput(stdout) {
 
 export function buildEngineCommand(job) {
   const command = [
-    config.enginePath,
-    job.inputPath,
-    job.outputPath,
+    config.enginePath
+  ];
+  
+  if (!job.liveMode) {
+    command.push(job.inputPath, job.outputPath);
+  } else {
+    command.push("--live");
+  }
+  
+  command.push(
     "--report-json",
     job.reportPath,
     "--lbs",
     String(job.loadBalancers),
     "--fps",
     String(job.fpsPerLb)
-  ];
+  );
 
   job.blockApps.forEach((value) => command.push("--block-app", value));
   job.blockDomains.forEach((value) => command.push("--block-domain", value));
@@ -90,6 +99,8 @@ export async function runJob(job) {
       shell: false
     });
 
+    runningJobs.set(job._id.toString(), child);
+
     let stdout = "";
     let stderr = "";
 
@@ -101,6 +112,7 @@ export async function runJob(job) {
     });
 
     child.on("close", (code) => {
+      runningJobs.delete(job._id.toString());
       const report = fs.existsSync(job.reportPath)
         ? JSON.parse(fs.readFileSync(job.reportPath, "utf8"))
         : parseEngineOutput(stdout);
@@ -120,6 +132,15 @@ export async function runJob(job) {
       });
     });
   });
+}
+
+export function stopJob(jobId) {
+  const child = runningJobs.get(jobId);
+  if (child) {
+    child.kill("SIGTERM");
+    return true;
+  }
+  return false;
 }
 
 export function buildJobPaths(fileName, outputName) {

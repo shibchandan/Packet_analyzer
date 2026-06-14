@@ -153,6 +153,9 @@ struct PacketJob {
     // Timestamps
     uint32_t ts_sec;
     uint32_t ts_usec;
+    
+    // WinDivert address (opaque bytes)
+    std::vector<uint8_t> windivert_addr_bytes;
 };
 
 // ============================================================================

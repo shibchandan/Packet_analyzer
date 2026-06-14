@@ -2,9 +2,19 @@
 #include <string>
 #include <sstream>
 #include <vector>
+#include <csignal>
 #include "dpi_engine.h"
 
 using namespace DPI;
+
+DPIEngine* global_engine_ptr = nullptr;
+
+void signalHandler(int signum) {
+    std::cout << "\nInterrupt signal (" << signum << ") received. Shutting down gracefully...\n";
+    if (global_engine_ptr) {
+        global_engine_ptr->stop();
+    }
+}
 
 void printUsage(const char* program) {
     std::cout << R"(
@@ -29,6 +39,7 @@ Options:
   --lbs <n>              Number of load balancer threads (default: 2)
   --fps <n>              FP threads per LB (default: 2)
   --verbose              Enable verbose output
+  --live                 Run in live interception mode (WinDivert)
 
 Examples:
   )" << program << R"( capture.pcap filtered.pcap
@@ -75,13 +86,8 @@ std::vector<std::string> split(const std::string& s) {
 }
 
 int main(int argc, char* argv[]) {
-    if (argc < 3) {
-        printUsage(argv[0]);
-        return 1;
-    }
-    
-    std::string input_file = argv[1];
-    std::string output_file = argv[2];
+    std::string input_file;
+    std::string output_file;
     
     // Parse options
     DPIEngine::Config config;
@@ -95,7 +101,7 @@ int main(int argc, char* argv[]) {
     std::string rules_file;
     std::string report_json_file;
     
-    for (int i = 3; i < argc; i++) {
+    for (int i = 1; i < argc; i++) {
         std::string arg = argv[i];
         
         if (arg == "--block-ip" && i + 1 < argc) {
@@ -116,11 +122,25 @@ int main(int argc, char* argv[]) {
             config.fps_per_lb = std::stoi(argv[++i]);
         } else if (arg == "--verbose") {
             config.verbose = true;
+        } else if (arg == "--live") {
+            config.live_mode = true;
         } else if (arg == "--help" || arg == "-h") {
             printUsage(argv[0]);
             return 0;
+        } else if (arg[0] != '-') {
+            if (input_file.empty()) input_file = arg;
+            else if (output_file.empty()) output_file = arg;
         }
     }
+    
+    if (!config.live_mode && (input_file.empty() || output_file.empty())) {
+        printUsage(argv[0]);
+        return 1;
+    }
+    
+    // Setup signal handler for graceful shutdown
+    std::signal(SIGINT, signalHandler);
+    std::signal(SIGTERM, signalHandler);
     
     // Create DPI engine
     DPIEngine engine(config);
@@ -153,10 +173,28 @@ int main(int argc, char* argv[]) {
         engine.blockProtocol(protocol);
     }
     
-    // Process the file
-    if (!engine.processFile(input_file, output_file)) {
-        std::cerr << "Failed to process file\n";
-        return 1;
+    global_engine_ptr = &engine;
+    
+    if (config.live_mode) {
+        if (!engine.runLive()) {
+            std::cerr << "Failed to start live mode\n";
+            return 1;
+        }
+        
+        // Wait until stopped by signal
+        while (engine.isRunning()) {
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+            // Optional: periodically write json report if specified
+            if (!report_json_file.empty()) {
+                engine.writeJsonReport(report_json_file);
+            }
+        }
+    } else {
+        // Process the file
+        if (!engine.processFile(input_file, output_file)) {
+            std::cerr << "Failed to process file\n";
+            return 1;
+        }
     }
 
     if (!report_json_file.empty() && !engine.writeJsonReport(report_json_file)) {
@@ -165,7 +203,10 @@ int main(int argc, char* argv[]) {
     }
     
     std::cout << "\nProcessing complete!\n";
-    std::cout << "Output written to: " << output_file << "\n";
+    if (!config.live_mode) {
+        std::cout << "Output written to: " << output_file << "\n";
+    }
     
+    global_engine_ptr = nullptr;
     return 0;
 }

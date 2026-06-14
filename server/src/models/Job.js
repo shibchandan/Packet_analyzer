@@ -1,4 +1,4 @@
-﻿import mongoose from "mongoose";
+import mongoose from "mongoose";
 
 
 const summarySchema = new mongoose.Schema(
@@ -25,6 +25,7 @@ const jobSchema = new mongoose.Schema(
       enum: ["queued", "running", "completed", "failed"],
       default: "queued"
     },
+    liveMode: { type: Boolean, default: false },
     blockApps: { type: [String], default: [] },
     blockDomains: { type: [String], default: [] },
     blockIps: { type: [String], default: [] },

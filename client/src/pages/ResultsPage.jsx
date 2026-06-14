@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { downloadUrl, fetchJob, fetchResults } from "../api";
+import { downloadUrl, fetchJob, fetchResults, stopJob } from "../api";
 
 function AnalyticsTable({ title, subtitle, columns, rows, emptyText }) {
   return (
@@ -60,6 +60,17 @@ export default function ResultsPage() {
     return <div className="page"><section className="panel"><p className="muted">Loading results...</p></section></div>;
   }
 
+  async function handleStop() {
+    if (window.confirm("Are you sure you want to stop the live interception?")) {
+      try {
+        await stopJob(jobId);
+        // Status will be updated on next poll
+      } catch (err) {
+        alert("Failed to stop: " + err.message);
+      }
+    }
+  }
+
   const summary = report?.summary || job.summary || {};
   const totalPackets = Number(summary.totalPackets || 0);
   const forwardedPackets = Number(summary.forwardedPackets || 0);
@@ -71,12 +82,17 @@ export default function ResultsPage() {
     <div className="page">
       <div className="section-header">
         <div>
-          <p className="eyebrow">{job.inputName}</p>
+          <p className="eyebrow">{job.inputName} {job.liveMode && "(Live Mode)"}</p>
           <h2>Analysis Results</h2>
         </div>
         <div className="actions-row">
           <span className={`status-pill ${job.status}`}>{job.status}</span>
-          <a className="ghost-button" href={downloadUrl(job._id)}>Download Output</a>
+          {job.liveMode && job.status === "running" && (
+             <button className="primary-button rose" onClick={handleStop}>Stop Interception</button>
+          )}
+          {!job.liveMode && (
+             <a className="ghost-button" href={downloadUrl(job._id)}>Download Output</a>
+          )}
         </div>
       </div>
 

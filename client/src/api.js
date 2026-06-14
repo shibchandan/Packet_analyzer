@@ -25,6 +25,18 @@ export async function fetchResults(id) {
   return response.json();
 }
 
+export async function fetchAggregateAnalytics() {
+  const response = await fetch(`${API_BASE}/analytics/aggregate`);
+  if (!response.ok) throw new Error("Failed to load aggregate analytics");
+  return response.json();
+}
+
+export async function stopJob(id) {
+  const response = await fetch(`${API_BASE}/jobs/${id}/stop`, { method: "POST" });
+  if (!response.ok) throw new Error("Failed to stop job");
+  return response.json();
+}
+
 export async function createJob(formData) {
   const response = await fetch(`${API_BASE}/jobs`, {
     method: "POST",

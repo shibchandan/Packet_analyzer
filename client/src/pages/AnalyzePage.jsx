@@ -23,7 +23,8 @@ export default function AnalyzePage() {
     blockApps: "",
     blockDomains: "",
     blockIps: "",
-    blockProtocols: ""
+    blockProtocols: "",
+    liveMode: false
   });
 
   useEffect(() => {
@@ -33,8 +34,11 @@ export default function AnalyzePage() {
   }, []);
 
   function handleFieldChange(event) {
-    const { name, value } = event.target;
-    setFormState((current) => ({ ...current, [name]: value }));
+    const { name, value, type, checked } = event.target;
+    setFormState((current) => ({
+      ...current,
+      [name]: type === "checkbox" ? checked : value
+    }));
   }
 
   function handleRuleSetChange(event) {
@@ -78,11 +82,24 @@ export default function AnalyzePage() {
     <div className="page">
       <div className="section-header"><div><p className="eyebrow">Job Launcher</p><h2>Analyze PCAP</h2></div></div>
       <form className="panel form-panel" onSubmit={handleSubmit}>
-        <label className="field">
-          <span>PCAP File</span>
-          <input type="file" name="file" accept=".pcap" required />
-          <HelperText>Upload a capture file to analyze offline. Example: a lab capture, browser session, or ICS sample.</HelperText>
-        </label>
+        
+        <div className="field checkbox-field" style={{ marginBottom: "1rem", padding: "1rem", background: "rgba(255,255,255,0.02)", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.1)" }}>
+          <label style={{ display: "flex", alignItems: "center", gap: "12px", cursor: "pointer", fontSize: "1.1rem", fontWeight: "600", color: "#64ffda" }}>
+            <input type="checkbox" name="liveMode" value="true" checked={formState.liveMode} onChange={handleFieldChange} style={{ width: "20px", height: "20px" }} />
+            Enable Live Interception (WinDivert)
+          </label>
+          <div style={{ marginTop: "8px", paddingLeft: "32px" }}>
+            <HelperText>If enabled, inspects real-time traffic directly from your network adapter instead of uploading a PCAP file.</HelperText>
+          </div>
+        </div>
+
+        {!formState.liveMode && (
+          <label className="field">
+            <span>PCAP File</span>
+            <input type="file" name="file" accept=".pcap" required={!formState.liveMode} />
+            <HelperText>Upload a capture file to analyze offline. Example: a lab capture, browser session, or ICS sample.</HelperText>
+          </label>
+        )}
 
         <div className="form-grid">
           <label className="field">
@@ -103,7 +120,7 @@ export default function AnalyzePage() {
           <label className="field">
             <span>FP Threads / LB</span>
             <input type="number" name="fpsPerLb" min="1" value={formState.fpsPerLb} onChange={handleFieldChange} required />
-            <HelperText>Processing threads per load balancer. Total FP threads = load balancers × FP threads/LB.</HelperText>
+            <HelperText>Processing threads per load balancer. Total FP threads = load balancers Ã— FP threads/LB.</HelperText>
           </label>
         </div>
 

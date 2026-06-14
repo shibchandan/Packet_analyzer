@@ -14,6 +14,9 @@
 #include <fstream>
 #include <mutex>
 #include <unordered_map>
+#include "win_divert_reader.h"
+#include <mutex>
+#include <unordered_map>
 
 namespace DPI {
 
@@ -60,6 +63,7 @@ public:
         size_t queue_size = 10000;
         std::string rules_file;
         bool verbose = false;
+        bool live_mode = false;
     };
     
     DPIEngine(const Config& config);
@@ -73,6 +77,9 @@ public:
     // output_file: Path to output PCAP (forwarded traffic)
     bool processFile(const std::string& input_file, 
                      const std::string& output_file);
+                     
+    // Run in live real-time interception mode using WinDivert
+    bool runLive();
     
     // Start the engine (starts all threads)
     void start();
@@ -181,6 +188,9 @@ private:
     // Control
     std::atomic<bool> running_{false};
     std::atomic<bool> processing_complete_{false};
+    
+    // Live Reader
+    std::unique_ptr<PacketAnalyzer::WinDivertReader> live_reader_;
     
     // Reader thread (separate for PCAP input)
     std::thread reader_thread_;

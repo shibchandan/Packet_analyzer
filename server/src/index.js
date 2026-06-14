@@ -9,6 +9,7 @@ import { healthRouter } from "./routes/health.js";
 import { jobsRouter } from "./routes/jobs.js";
 import { rulesRouter } from "./routes/rules.js";
 import { ruleSetsRouter } from "./routes/ruleSets.js";
+import { analyticsRouter } from "./routes/analytics.js";
 
 async function start() {
   ensureDirs();
@@ -27,6 +28,7 @@ async function start() {
   app.use("/api/jobs", jobsRouter);
   app.use("/api/rules", rulesRouter);
   app.use("/api/rule-sets", ruleSetsRouter);
+  app.use("/api/analytics", analyticsRouter);
 
   app.listen(config.port, () => {
     console.log(`DPI dashboard server listening on http://localhost:${config.port}`);
