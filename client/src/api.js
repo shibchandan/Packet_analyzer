@@ -139,6 +139,24 @@ export async function fetchAuditLogs() {
   return response.json();
 }
 
+export async function fetchSettings() {
+  const response = await authFetch(`${API_BASE}/settings`);
+  if (!response.ok) throw new Error("Failed to fetch settings");
+  const payload = await response.json();
+  return payload.settings;
+}
+
+export async function updateSettings(settings) {
+  const response = await authFetch(`${API_BASE}/settings`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(settings)
+  });
+  if (!response.ok) throw new Error("Failed to update settings");
+  const payload = await response.json();
+  return payload.settings;
+}
+
 export function downloadUrl(id) {
   return `${API_BASE}/jobs/${id}/download`;
 }

@@ -12,6 +12,7 @@ import { ruleSetsRouter } from "./routes/ruleSets.js";
 import { analyticsRouter } from "./routes/analytics.js";
 import { authRouter } from "./routes/auth.js";
 import { auditRouter } from "./routes/audit.js";
+import { settingsRouter } from "./routes/settings.js";
 import { authenticate } from "./middleware/auth.js";
 
 async function start() {
@@ -36,6 +37,7 @@ async function start() {
   app.use("/api/rule-sets", authenticate, ruleSetsRouter);
   app.use("/api/analytics", authenticate, analyticsRouter);
   app.use("/api/audit", authenticate, auditRouter);
+  app.use("/api/settings", authenticate, settingsRouter);
 
   app.listen(config.port, () => {
     console.log(`DPI dashboard server listening on http://localhost:${config.port}`);

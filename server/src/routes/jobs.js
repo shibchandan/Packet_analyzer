@@ -5,6 +5,7 @@ import multer from "multer";
 
 import { Job } from "../models/Job.js";
 import { AuditLog } from "../models/AuditLog.js";
+import { Settings } from "../models/Settings.js";
 import { buildJobPaths, runJob, stopJob } from "../services/engineService.js";
 import { config } from "../config.js";
 import { requireAdmin } from "../middleware/auth.js";
@@ -13,8 +14,7 @@ import { requireAdmin } from "../middleware/auth.js";
 export const jobsRouter = Router();
 
 const upload = multer({ 
-  dest: config.uploadsDir,
-  limits: { fileSize: 100 * 1024 * 1024 } // 100 MB limit
+  dest: config.uploadsDir
 });
 
 function splitCsv(value) {
@@ -71,14 +71,26 @@ jobsRouter.post("/", requireAdmin, upload.single("file"), async (req, res) => {
   const fileName = isLive ? "live_capture" : req.file.originalname;
   const paths = buildJobPaths(fileName, outputName);
   
-  // Rename from temporary multer filename to our structured filename if offline
+  // Fetch global settings
+  let settings = await Settings.findOne({ singletonKey: "GLOBAL_SETTINGS" });
+  if (!settings) {
+    settings = await Settings.create({});
+  }
+
+  // Enforce offline upload size limits
   if (!isLive && req.file) {
+    const limitBytes = settings.offlineUploadLimitMb * 1024 * 1024;
+    if (req.file.size > limitBytes) {
+      fs.unlinkSync(req.file.path);
+      res.status(400).json({ message: `File size exceeds the global limit of ${settings.offlineUploadLimitMb} MB` });
+      return;
+    }
     fs.renameSync(req.file.path, paths.uploadPath);
   }
   
-  // Clamp thread allocations to prevent DoS
-  const clampedLbs = Math.max(1, Math.min(16, Number(req.body.loadBalancers || 2)));
-  const clampedFps = Math.max(1, Math.min(32, Number(req.body.fpsPerLb || 2)));
+  // Clamp thread allocations using global settings
+  const clampedLbs = Math.max(1, Math.min(settings.maxLoadBalancers, Number(req.body.loadBalancers || 2)));
+  const clampedFps = Math.max(1, Math.min(settings.maxFpsPerLb, Number(req.body.fpsPerLb || 2)));
 
   const job = await Job.create({
     inputName: fileName,
