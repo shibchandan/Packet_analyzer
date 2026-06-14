@@ -7,6 +7,7 @@ import { Job } from "../models/Job.js";
 import { AuditLog } from "../models/AuditLog.js";
 import { Settings } from "../models/Settings.js";
 import { buildJobPaths, runJob, stopJob } from "../services/engineService.js";
+import { sendSyslog, sendSlackAlert } from "../services/integrationService.js";
 import { config } from "../config.js";
 import { requireAdmin } from "../middleware/auth.js";
 
@@ -49,6 +50,18 @@ async function executeJob(jobId) {
   job.exitCode = result.exitCode;
   job.summary = result.report.summary;
   await job.save();
+
+  // Trigger Enterprise Integrations
+  const totalDropped = job.summary?.droppedPackets || 0;
+  const msg = `Job [${job.outputName}] finished. Status: ${job.status}. Packets Dropped: ${totalDropped}.`;
+  
+  // Forward job summary to SIEM
+  sendSyslog(msg, job.status === "failed" ? 3 : 5);
+  
+  // Alert on high-priority events (e.g., dropped malicious traffic)
+  if (totalDropped > 0) {
+    sendSlackAlert(`*Malicious Traffic Blocked!*\nJob \`${job.outputName}\` completed and actively blocked \`${totalDropped}\` packets matching security rules.`);
+  }
 }
 
 jobsRouter.get("/", async (_req, res) => {

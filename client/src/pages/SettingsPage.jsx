@@ -23,8 +23,11 @@ export default function SettingsPage() {
   }, []);
 
   const handleChange = (e) => {
-    const { name, value } = e.target;
-    setSettings((prev) => ({ ...prev, [name]: Number(value) }));
+    const { name, value, type } = e.target;
+    setSettings((prev) => ({ 
+      ...prev, 
+      [name]: type === 'number' ? Number(value) : value 
+    }));
   };
 
   const handleSubmit = async (e) => {
@@ -113,6 +116,72 @@ export default function SettingsPage() {
               {message.text}
             </p>
           )}
+
+          <div className="section-header" style={{ marginTop: '1rem', borderBottom: '1px solid var(--panel-border)', paddingBottom: '0.5rem' }}>
+            <div>
+              <p className="eyebrow">Enterprise Integrations</p>
+            </div>
+          </div>
+
+          <div>
+            <label className="field-label">Syslog Host (SIEM)</label>
+            <input 
+              type="text" 
+              className="text-input" 
+              name="syslogHost"
+              value={settings?.syslogHost || ""} 
+              onChange={handleChange}
+              disabled={role !== "admin"}
+              placeholder="e.g., 10.0.0.50"
+            />
+            <p className="muted" style={{ marginTop: '0.25rem', fontSize: '0.85rem' }}>
+              Forward audit logs and job completion summaries to this IP via UDP.
+            </p>
+          </div>
+
+          <div>
+            <label className="field-label">Syslog Port</label>
+            <input 
+              type="number" 
+              className="text-input" 
+              name="syslogPort"
+              value={settings?.syslogPort || 514} 
+              onChange={handleChange}
+              disabled={role !== "admin"}
+            />
+          </div>
+
+          <div>
+            <label className="field-label">Slack Webhook URL</label>
+            <input 
+              type="text" 
+              className="text-input" 
+              name="slackWebhook"
+              value={settings?.slackWebhook || ""} 
+              onChange={handleChange}
+              disabled={role !== "admin"}
+              placeholder="https://hooks.slack.com/services/..."
+            />
+            <p className="muted" style={{ marginTop: '0.25rem', fontSize: '0.85rem' }}>
+              Real-time alerts for high-priority events (e.g. malicious traffic blocked).
+            </p>
+          </div>
+
+          <div>
+            <label className="field-label">Threat Intel Feed URL</label>
+            <input 
+              type="text" 
+              className="text-input" 
+              name="threatIntelUrl"
+              value={settings?.threatIntelUrl || ""} 
+              onChange={handleChange}
+              disabled={role !== "admin"}
+              placeholder="https://..."
+            />
+            <p className="muted" style={{ marginTop: '0.25rem', fontSize: '0.85rem' }}>
+              Raw text list of malicious IPs to auto-sync into a dynamic blocklist.
+            </p>
+          </div>
 
           <div style={{ marginTop: '1rem' }}>
             {role === "admin" ? (

@@ -14,6 +14,7 @@ import { authRouter } from "./routes/auth.js";
 import { auditRouter } from "./routes/audit.js";
 import { settingsRouter } from "./routes/settings.js";
 import { authenticate } from "./middleware/auth.js";
+import { startIntegrationWorkers } from "./services/integrationService.js";
 
 async function start() {
   ensureDirs();
@@ -41,6 +42,7 @@ async function start() {
 
   app.listen(config.port, () => {
     console.log(`DPI dashboard server listening on http://localhost:${config.port}`);
+    startIntegrationWorkers();
   });
 }
 

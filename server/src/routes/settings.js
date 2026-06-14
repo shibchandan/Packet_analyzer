@@ -25,6 +25,12 @@ settingsRouter.put("/", requireAdmin, async (req, res) => {
   if (req.body.maxFpsPerLb !== undefined) config.maxFpsPerLb = req.body.maxFpsPerLb;
   if (req.body.offlineUploadLimitMb !== undefined) config.offlineUploadLimitMb = req.body.offlineUploadLimitMb;
   
+  if (req.body.syslogHost !== undefined) config.syslogHost = req.body.syslogHost;
+  if (req.body.syslogPort !== undefined) config.syslogPort = req.body.syslogPort;
+  if (req.body.slackWebhook !== undefined) config.slackWebhook = req.body.slackWebhook;
+  if (req.body.threatIntelUrl !== undefined) config.threatIntelUrl = req.body.threatIntelUrl;
+  if (req.body.threatIntelSyncIntervalMinutes !== undefined) config.threatIntelSyncIntervalMinutes = req.body.threatIntelSyncIntervalMinutes;
+  
   await config.save();
   
   await AuditLog.create({
