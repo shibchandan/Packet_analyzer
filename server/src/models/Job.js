@@ -15,9 +15,9 @@ const summarySchema = new mongoose.Schema(
 const jobSchema = new mongoose.Schema(
   {
     inputName: { type: String, required: true },
-    inputPath: { type: String, required: true },
+    inputPath: { type: String, default: "" },
     outputName: { type: String, required: true },
-    outputPath: { type: String, required: true },
+    outputPath: { type: String, default: "" },
     reportPath: { type: String, required: true },
     logPath: { type: String, required: true },
     status: {
