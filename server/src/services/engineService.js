@@ -90,14 +90,45 @@ export async function runJob(job) {
     };
   }
 
+  // OS-LEVEL SANDBOXING AND SANITIZATION
+  if (!job.liveMode) {
+    const resolvedInput = path.resolve(job.inputPath);
+    const resolvedUploadsDir = path.resolve(config.uploadsDir);
+    if (!resolvedInput.startsWith(resolvedUploadsDir)) {
+      return {
+        exitCode: 1,
+        stdout: "",
+        stderr: "Sandbox violation: Malicious input path detected.",
+        report: { summary: {}, domains: [], rawStdout: "" }
+      };
+    }
+  }
+
   const command = buildEngineCommand(job);
   const [commandPath, ...args] = command;
 
   return new Promise((resolve) => {
-    const child = spawn(commandPath, args, {
+    // Drop all node environment variables to prevent information leakage if exploited
+    const sandboxEnv = {
+      PATH: process.env.PATH,
+      SystemRoot: process.env.SystemRoot,
+      TEMP: process.env.TEMP,
+      TMP: process.env.TMP,
+    };
+
+    const spawnOptions = {
       cwd: config.rootDir,
-      shell: false
-    });
+      shell: false,
+      windowsHide: true,
+    };
+
+    // If Offline Mode (Untrusted PCAP), strictly isolate environment.
+    // If Live Mode, keep it as is (requires admin/kernel access).
+    if (!job.liveMode) {
+      spawnOptions.env = sandboxEnv;
+    }
+
+    const child = spawn(commandPath, args, spawnOptions);
 
     runningJobs.set(job._id.toString(), child);
 
