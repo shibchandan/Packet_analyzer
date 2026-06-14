@@ -1,207 +1,143 @@
-# DPI Engine - Deep Packet Inspection System
+# Enterprise Deep Packet Inspection (DPI) Firewall
 
-A multithreaded C++ DPI engine with a MERN dashboard for offline PCAP analysis, rule-based blocking, and traffic visualization.
+A high-performance, multithreaded C++ DPI engine coupled with a modern MERN-stack command dashboard. This system is capable of both **offline PCAP analysis** and **live kernel-level traffic interception** (via WinDivert).
 
-## What This Project Does
+It features Zero-Trust authentication, process sandboxing, automated Threat Intelligence synchronization, and enterprise integrations (SIEM/Syslog/Slack).
 
-- Parses packets from `.pcap` captures
-- Tracks connections using five-tuple flow state
-- Extracts TLS SNI / HTTP host information when available
-- Supports blocking by app, domain, IP, and protocol
-- Exports JSON reports for dashboard analytics
-- Visualizes dropped traffic, DNS activity, top IPs, ports, and protocols
-- Lets you save reusable rule-set profiles from the web UI
+---
 
-## Architecture Diagram
-
-```mermaid
-flowchart LR
-    A[PCAP Upload in React Client] --> B[Express API Server]
-    B --> C[MongoDB\nJobs, Rules, Rule Sets]
-    B --> D[dpi_engine.exe\nMultithreaded C++ Core]
-    D --> E[Filtered Output PCAP]
-    D --> F[JSON Report]
-    B --> G[Results API]
-    G --> H[Dashboard Views\nComparison, DNS, Top IPs, Blocked Reasons]
-```
-
-## System Layout
+## 🏗️ System Layout
 
 ```text
 Packet_analyzer/
-|-- engine/include/       C++ headers
-|-- engine/src/           C++ engine sources
-|-- dpi_engine.exe        Built analyzer executable
-|-- client/               React + Vite dashboard
-|-- server/               Express + Mongo API
-|-- docs/screenshots/     README image assets
-|-- test_dpi.pcap         Sample capture
-|-- CMakeLists.txt        Native build config
-`-- README.md             Project overview
+|-- engine/                 [C++ High-Performance DPI Engine]
+|   |-- include/            C++ header files (types, parsers, engine)
+|   |-- src/                C++ source files (load balancer, fast path, rules)
+|   `-- lib/                WinDivert libraries
+|-- server/                 [Node.js / Express / MongoDB Backend]
+|   |-- src/
+|   |   |-- models/         MongoDB Schemas (Job, AuditLog, Settings, ThreatIntel)
+|   |   |-- routes/         API Endpoints (Jobs, Settings, Auth, ThreatIntel)
+|   |   |-- services/       Orchestrators (engineService, integrationService, threatIntelService)
+|   |   `-- middleware/     Zero-Trust Security (JWT, RBAC Admin/Viewer)
+|   `-- data/               Uploads, Output PCAPs, JSON Reports
+|-- client/                 [React / Vite Frontend Dashboard]
+|   |-- src/
+|   |   |-- components/     Reusable UI components
+|   |   |-- contexts/       React Contexts (AuthContext)
+|   |   `-- pages/          Dashboard views (Analyze, Results, Audit, Settings)
+|-- WinDivert/              WinDivert 1.4 package and drivers
+|-- Run_Backend_Admin.bat   Auto-elevation launch script for Live Interception
+|-- dpi_engine.exe          Compiled C++ Engine executable
+`-- README.md               Project documentation
 ```
 
-## Main Workflow
+---
 
-1. Upload a `.pcap` from the React dashboard.
-2. The Express server stores the job and launches `dpi_engine.exe`.
-3. The C++ engine parses packets, applies rules, and writes:
-   - a filtered `.pcap`
-   - a JSON report
-   - standard log output
-4. The dashboard loads the report and renders:
-   - packet totals
-   - blocked traffic percentage
-   - blocked reasons
-   - DNS query analytics
-   - top IPs, ports, and protocols
+## 🏛️ Architecture Diagram
 
-## Current Feature Set
+```mermaid
+flowchart TD
+    subgraph Frontend [React Dashboard]
+        UI[Web UI]
+        AuthCtx[Auth Context]
+    end
 
-### Engine
-- Offline PCAP analysis and **Live Interception (WinDivert)**
-- Multithreaded load balancer + fast-path processing
-- Process sandboxing and compiler-level memory hardening (ASLR, DEP, SSP)
-- Flow tracking and classification
-- SNI / host extraction
-- DNS query analytics
-- Blocking by IP, app, domain, and protocol
-- JSON report export with traffic analytics
+    subgraph Backend [Node.js / Express Server]
+        API[Express API]
+        RBAC[Auth Middleware]
+        TI_Worker[Threat Intel Worker]
+        Integrations[Syslog / Slack Alerting]
+    end
 
-### Dashboard
-- Upload and run analysis jobs
-- Zero-Trust Authentication and Role-Based Access Control (RBAC)
-- Full Audit Logging
-- Enterprise Integrations (Threat Intel, SIEM Syslog, Slack Alerts)
-- Results comparison view
-- Blocked reason breakdown
-- DNS query table
-- Top source/destination IP analytics
-- Top destination ports and protocols
-- Saved rule sets
-- Clear helper text for rule fields
+    subgraph Database [MongoDB]
+        DB[(Jobs, Rules, Audit Logs, Settings)]
+    end
 
-## Run The Project
+    subgraph Core [C++ DPI Engine]
+        DPI[dpi_engine.exe]
+        LB[Load Balancer Thread]
+        FP[Fast-Path Workers]
+    end
 
-### C++ Engine Only
+    subgraph OS [Windows Kernel]
+        WD[WinDivert64.sys]
+    end
 
-```powershell
-cd D:\Packet_analyzer
-.\dpi_engine.exe test_dpi.pcap output.pcap --report-json report.json
+    UI <--> |JWT Authenticated API| API
+    AuthCtx --> RBAC
+    RBAC --> API
+    API <--> DB
+    TI_Worker <--> |Syncs Malicious IPs| DB
+    API --> |Spawn Sandboxed Process| DPI
+    API --> |Security Events| Integrations
+    DPI --> LB
+    LB --> FP
+    FP <--> |Intercept Packets| WD
 ```
 
-### MERN Dashboard
+---
 
-Server:
+## ⚙️ Main Workflow
 
-```powershell
-cd D:\Packet_analyzer\server
-npm run dev
-```
+1. **Authentication:** User accesses the React dashboard (Authentication currently bypassed for local ease of use, but JWT/RBAC middleware is fully implemented).
+2. **Job Configuration:** User uploads a `.pcap` file OR selects **Live Interception**. They configure blocking rules (Domains, Apps, IPs, Protocols).
+3. **Orchestration:** The Express server records the job in MongoDB and launches `dpi_engine.exe` in a strictly isolated subprocess.
+4. **Execution:** The C++ engine utilizes a Load Balancer to hash flows to multithreaded Fast-Path workers. It hooks into the network stack using WinDivert (if live) or reads the PCAP (if offline).
+5. **Enforcement & Intelligence:** Packets are parsed (SNI/DNS extracted) and matched against user rules AND the automated Threat Intel blocklist.
+6. **Reporting:** The engine outputs a filtered PCAP and a comprehensive JSON analytics report.
+7. **Visualization & Alerting:** The React dashboard renders traffic comparisons and DNS analytics. The backend simultaneously fires Syslog events to your SIEM and Slack Webhooks if malicious traffic was blocked.
 
-Client:
+---
 
+## 🔒 Enterprise Security Features
+
+This project was built with production-grade security architecture in mind:
+
+- **Live Kernel-Level Interception:** Real-time traffic monitoring and blocking using WinDivert.
+- **Zero-Trust Authentication:** JWT-based session management and Role-Based Access Control (Admin vs Viewer roles).
+- **Process Sandboxing:** The C++ DPI engine execution environment is hardened (ASLR, DEP, Stack Smash Protectors) and strictly isolated from the Node.js process.
+- **Malware-Safe Uploads:** Robust file validation, sanitization, and size limits to prevent malicious PCAP execution.
+- **Comprehensive Audit Logging:** Immutable MongoDB logs of all user actions (logins, rule changes, job executions).
+- **Automated Threat Intelligence:** Background workers continuously sync and apply thousands of malicious IPs from external blocklists (e.g., Firehol Level 1).
+- **SIEM & Real-Time Alerting:** Immediate job status and security event forwarding to Syslog servers and Slack Webhooks.
+
+---
+
+## 🚀 Run The Project
+
+### 1. Start the Backend (Admin Required for Live Interception)
+To use Live Interception, the Node.js server *must* run as Administrator so it can grant the C++ engine permission to inject the WinDivert driver.
+
+Navigate to the project root and double-click:
+**`Run_Backend_Admin.bat`**
+*(This will automatically request UAC Admin privileges and start the Express server on `http://localhost:8000`)*
+
+### 2. Start the Frontend Dashboard
+Open a standard terminal (no admin required):
 ```powershell
 cd D:\Packet_analyzer\client
 npm run dev
 ```
 
-Open [http://localhost:5173](http://localhost:5173).
+### 3. Access the System
+Open [http://localhost:5173](http://localhost:5173) in your browser.
 
-## Good Demo Scenarios
+---
 
-### ICS Capture Demo
-Use the Netresec 4SICS capture and block a known active host such as `192.168.88.61`.
+## 📸 Screenshot Capture Checklist
 
-Expected result:
-- dropped packets increase
-- blocked reason shows `IP: 192.168.88.61`
-- comparison view shows blocked percentage
+If you want to document this project for your portfolio, it is recommended to take the following screenshots and place them in `docs/screenshots/`:
 
-### Protocol Blocking Demo
-Use `Block Protocols = DNS` or `ICMP` on an ICS-oriented capture.
+1. **Dashboard Home** (`dashboard-home.png`): Showing service status and recent jobs.
+2. **Analyze Job Launcher** (`analyze-job-launcher.png`): Showing the rule configuration and Live Mode toggle.
+3. **Results Comparison** (`results-comparison.png`): Showing the traffic split (Forwarded vs Dropped) and blocked reasons.
+4. **DNS Analytics** (`results-dns-analytics.png`): Showing the parsed domains.
+5. **Settings & Integrations** (`settings.png`): Showing the Threat Intel and SIEM configuration page.
+6. **Audit Logs** (`audit-logs.png`): Showing the immutable security trail.
 
-Expected result:
-- dropped packets increase
-- blocked reasons show `PROTOCOL: DNS` or `PROTOCOL: ICMP`
-- DNS table reflects blocked query counts
+---
 
-### Consumer App Demo
-Use `test_dpi.pcap` and block `YouTube` or `Google`.
-
-Expected result:
-- app blocking works when SNI/host extraction identifies the traffic
-- blocked reasons show `APP: YouTube` or similar
-
-## Screenshot Gallery
-
-Drop your UI captures into `docs/screenshots/` using the file names below and the README will render them automatically.
-
-### Dashboard Home
-
-![Dashboard Home](docs/screenshots/dashboard-home.png)
-
-### Analyze Job Launcher
-
-![Analyze Job Launcher](docs/screenshots/analyze-job-launcher.png)
-
-### Results Comparison
-
-![Results Comparison](docs/screenshots/results-comparison.png)
-
-### Results DNS Analytics
-
-![Results DNS Analytics](docs/screenshots/results-dns-analytics.png)
-
-### Rules Saved Profiles
-
-![Rules Saved Profiles](docs/screenshots/rules-saved-profiles.png)
-
-## Screenshot Capture Checklist
-
-Recommended screenshots:
-1. Dashboard home with service status and recent jobs
-2. Analyze page with a saved rule set selected
-3. Results page showing traffic comparison and blocked reasons
-4. Results page showing DNS analytics and top IPs
-5. Rules page showing saved rule sets
-
-Expected file names under `docs/screenshots/`:
-- `dashboard-home.png`
-- `analyze-job-launcher.png`
-- `results-comparison.png`
-- `results-dns-analytics.png`
-- `rules-saved-profiles.png`
-
-## Security Scope and Limitations
-
-This project demonstrates core DPI and traffic-control concepts well, but it is currently an offline PCAP analysis platform, not a hardened production security appliance.
-
-### What Is Covered
-
-- Packet parsing and flow tracking
-- Rule-based filtering by IP, app, domain, and protocol
-- TLS SNI / HTTP host visibility when available
-- DNS query analytics
-- Basic protocol-aware filtering for traffic such as `DNS`, `ICMP`, `MODBUS`, and `S7`
-- JSON reporting and dashboard visualization
-
-### Enterprise Security Features Implemented
-
-The following production-grade security features have been successfully implemented:
-
-- **Live Inline Packet Interception**: Real-time traffic monitoring and blocking using WinDivert.
-- **Zero-Trust Authentication**: JWT-based session management and Role-Based Access Control (Admin vs Viewer).
-- **Process Sandboxing**: The C++ DPI engine execution environment is hardened (ASLR, DEP, Stack Smash Protectors) and strictly isolated from the Node.js process.
-- **Malware-Safe Uploads**: Robust file validation, sanitization, and size limits to prevent malicious PCAP execution.
-- **Comprehensive Audit Logging**: Immutable logs of all user actions (logins, rule changes, job executions).
-- **Automated Threat Intelligence**: Background workers continuously sync and apply thousands of malicious IPs from external blocklists (e.g., Firehol Level 1).
-- **SIEM & Real-Time Alerting**: Immediate job status and security event forwarding to Syslog servers and Slack Webhooks.
-
-## Resume-Ready Summary
+## 📄 Resume-Ready Summary
 
 Built a multithreaded Deep Packet Inspection firewall in C++ capable of offline PCAP analysis and **live kernel-level traffic interception** (WinDivert). Engineered a secure MERN dashboard with Zero-Trust authentication (JWT/RBAC), process sandboxing, automated Threat Intelligence ingestion, and real-time SIEM/Slack alerting to command the engine and visualize traffic analytics.
-
-## Deep Technical Walkthrough
-
-The original long-form explanation for packet flow, SNI extraction, multithreading, and code structure is preserved in [PROJECT_DEEP_DIVE.md](./PROJECT_DEEP_DIVE.md).
-
