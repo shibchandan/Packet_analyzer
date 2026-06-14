@@ -98,6 +98,16 @@ export default function ResultsPage() {
         </div>
       </div>
 
+      {job.status === "failed" && job.stderr && (
+        <section className="panel" style={{ borderColor: 'var(--rose-500)', marginBottom: '1rem' }}>
+          <h3 style={{ color: 'var(--rose-400)' }}>⚠️ Job Failed</h3>
+          <p className="muted" style={{ marginTop: '0.5rem', marginBottom: '0.5rem' }}>The engine encountered a fatal error and could not complete the analysis:</p>
+          <pre className="log-block" style={{ color: 'var(--rose-200)', background: 'rgba(244, 63, 94, 0.05)', border: '1px solid var(--rose-500)' }}>
+            {job.stderr}
+          </pre>
+        </section>
+      )}
+
       <section className="stats-grid">
         <article className="stat-card blue"><span>Total Packets</span><strong>{job.summary?.totalPackets ?? "-"}</strong></article>
         <article className="stat-card mint"><span>Forwarded</span><strong>{job.summary?.forwardedPackets ?? "-"}</strong></article>
@@ -237,8 +247,12 @@ export default function ResultsPage() {
       />
 
       <section className="panel">
-        <div className="section-header"><div><p className="eyebrow">Stdout</p><h2>Engine Log</h2></div></div>
-        <pre className="log-block">{job.stdout || job.stderr || "Job is still running or the engine produced no text output."}</pre>
+        <div className="section-header"><div><p className="eyebrow">Logs</p><h2>Engine Console Output</h2></div></div>
+        <pre className="log-block">
+          {job.stdout && `--- STDOUT ---\n${job.stdout}\n`}
+          {job.stderr && `--- STDERR ---\n${job.stderr}\n`}
+          {(!job.stdout && !job.stderr) && "Job is still running or the engine produced no text output."}
+        </pre>
       </section>
     </div>
   );
