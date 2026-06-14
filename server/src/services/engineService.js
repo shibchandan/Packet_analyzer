@@ -117,7 +117,7 @@ export async function runJob(job) {
     };
 
     const spawnOptions = {
-      cwd: config.rootDir,
+      cwd: path.dirname(config.enginePath),
       shell: false,
       windowsHide: true,
     };
