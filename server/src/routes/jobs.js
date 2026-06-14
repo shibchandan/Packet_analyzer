@@ -1,15 +1,19 @@
-﻿import fs from "fs";
+import fs from "fs";
 import path from "path";
 import { Router } from "express";
 import multer from "multer";
 
 import { Job } from "../models/Job.js";
 import { buildJobPaths, runJob } from "../services/engineService.js";
+import { config } from "../config.js";
 
 
 export const jobsRouter = Router();
 
-const upload = multer({ storage: multer.memoryStorage() });
+const upload = multer({ 
+  dest: config.uploadsDir,
+  limits: { fileSize: 100 * 1024 * 1024 } // 100 MB limit
+});
 
 function splitCsv(value) {
   return String(value || "")
@@ -61,7 +65,13 @@ jobsRouter.post("/", upload.single("file"), async (req, res) => {
 
   const outputName = req.body.outputName || "filtered_output.pcap";
   const paths = buildJobPaths(req.file.originalname, outputName);
-  fs.writeFileSync(paths.uploadPath, req.file.buffer);
+  
+  // Rename from temporary multer filename to our structured filename
+  fs.renameSync(req.file.path, paths.uploadPath);
+  
+  // Clamp thread allocations to prevent DoS
+  const clampedLbs = Math.max(1, Math.min(16, Number(req.body.loadBalancers || 2)));
+  const clampedFps = Math.max(1, Math.min(32, Number(req.body.fpsPerLb || 2)));
 
   const job = await Job.create({
     inputName: req.file.originalname,
@@ -75,8 +85,8 @@ jobsRouter.post("/", upload.single("file"), async (req, res) => {
     blockDomains: splitCsv(req.body.blockDomains),
     blockIps: splitCsv(req.body.blockIps),
     blockProtocols: splitCsv(req.body.blockProtocols),
-    loadBalancers: Number(req.body.loadBalancers || 2),
-    fpsPerLb: Number(req.body.fpsPerLb || 2)
+    loadBalancers: clampedLbs,
+    fpsPerLb: clampedFps
   });
 
   void executeJob(job._id.toString());

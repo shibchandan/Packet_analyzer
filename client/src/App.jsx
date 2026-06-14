@@ -1,15 +1,19 @@
-﻿import { NavLink, Route, Routes } from "react-router-dom";
+import { NavLink, Route, Routes } from "react-router-dom";
 import DashboardPage from "./pages/DashboardPage";
 import AnalyzePage from "./pages/AnalyzePage";
 import ResultsPage from "./pages/ResultsPage";
 import HistoryPage from "./pages/HistoryPage";
 import RulesPage from "./pages/RulesPage";
+import SettingsPage from "./pages/SettingsPage";
+import AnalyticsPage from "./pages/AnalyticsPage";
 
 const navItems = [
   { to: "/", label: "Dashboard" },
   { to: "/analyze", label: "Analyze" },
+  { to: "/analytics", label: "Analytics" },
   { to: "/history", label: "History" },
-  { to: "/rules", label: "Rules" }
+  { to: "/rules", label: "Rules" },
+  { to: "/settings", label: "Settings" }
 ];
 
 export default function App() {
@@ -31,8 +35,10 @@ export default function App() {
         <Routes>
           <Route path="/" element={<DashboardPage />} />
           <Route path="/analyze" element={<AnalyzePage />} />
+          <Route path="/analytics" element={<AnalyticsPage />} />
           <Route path="/history" element={<HistoryPage />} />
           <Route path="/rules" element={<RulesPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
           <Route path="/results/:jobId" element={<ResultsPage />} />
         </Routes>
       </main>

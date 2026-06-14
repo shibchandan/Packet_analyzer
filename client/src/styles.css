@@ -1,4 +1,4 @@
-﻿:root {
+:root {
   color-scheme: dark;
   --bg: #08111f;
   --bg-alt: #0e1b2f;
@@ -78,9 +78,12 @@ button, input, select { font: inherit; }
   padding: 12px 16px;
   cursor: pointer;
 }
-.primary-button { background: linear-gradient(135deg, #56f1c1, #56b5ff); color: #04101b; font-weight: 700; }
-.ghost-button { background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.12); }
-.text-link, .text-button { color: var(--blue); background: transparent; padding: 0; }
+.primary-button { background: linear-gradient(135deg, #56f1c1, #56b5ff); color: #04101b; font-weight: 700; transition: transform 0.2s ease, box-shadow 0.2s ease; }
+.primary-button:hover { transform: translateY(-1px); box-shadow: 0 4px 20px rgba(86, 241, 193, 0.3); }
+.ghost-button { background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.12); transition: background 0.2s ease; }
+.ghost-button:hover { background: rgba(255, 255, 255, 0.08); }
+.text-link, .text-button { color: var(--blue); background: transparent; padding: 0; transition: color 0.2s ease; }
+.text-link:hover, .text-button:hover { color: #8ecdff; }
 .data-table { width: 100%; border-collapse: collapse; }
 .data-table th, .data-table td { text-align: left; padding: 14px 8px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); }
 .status-pill {
@@ -103,6 +106,16 @@ button, input, select { font: inherit; }
   border-radius: 14px;
   border: 1px solid rgba(255, 255, 255, 0.14);
   background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+.field input:focus, .field select:focus, .inline-form input:focus, .inline-form select:focus {
+  outline: none;
+  border-color: rgba(103, 183, 255, 0.5);
+  background: rgba(255, 255, 255, 0.08);
+}
+option {
+  background: var(--bg-alt);
   color: var(--text);
 }
 .form-actions, .actions-row { display: flex; gap: 12px; align-items: center; }
