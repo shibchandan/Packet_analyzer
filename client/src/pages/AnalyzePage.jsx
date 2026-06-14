@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { createJob, fetchRuleSets } from "../api";
+import { useAuth } from "../contexts/AuthContext";
 
 function csvFrom(items) {
   return Array.isArray(items) ? items.join(",") : "";
@@ -12,6 +13,7 @@ function HelperText({ children }) {
 
 export default function AnalyzePage() {
   const navigate = useNavigate();
+  const { role } = useAuth();
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [ruleSets, setRuleSets] = useState([]);
@@ -160,7 +162,17 @@ export default function AnalyzePage() {
         </div>
 
         {error ? <p className="error-text">{error}</p> : null}
-        <div className="form-actions"><button className="primary-button" type="submit" disabled={submitting}>{submitting ? "Launching..." : "Run Analysis"}</button></div>
+        <div className="form-actions">
+          {role === "admin" ? (
+            <button className="primary-button" type="submit" disabled={submitting}>
+              {submitting ? "Launching..." : "Run Analysis"}
+            </button>
+          ) : (
+            <button className="primary-button" type="button" disabled>
+              Admin Required to Run
+            </button>
+          )}
+        </div>
       </form>
     </div>
   );

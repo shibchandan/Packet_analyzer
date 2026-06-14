@@ -1,6 +1,8 @@
 import { Router } from "express";
 
 import { RuleSet } from "../models/RuleSet.js";
+import { AuditLog } from "../models/AuditLog.js";
+import { requireAdmin } from "../middleware/auth.js";
 
 export const ruleSetsRouter = Router();
 
@@ -9,21 +11,32 @@ ruleSetsRouter.get("/", async (_req, res) => {
   res.json({ ruleSets });
 });
 
-ruleSetsRouter.post("/", async (req, res) => {
-  const payload = {
-    name: req.body.name,
-    description: req.body.description || "",
-    blockApps: Array.isArray(req.body.blockApps) ? req.body.blockApps : [],
-    blockDomains: Array.isArray(req.body.blockDomains) ? req.body.blockDomains : [],
-    blockIps: Array.isArray(req.body.blockIps) ? req.body.blockIps : [],
-    blockProtocols: Array.isArray(req.body.blockProtocols) ? req.body.blockProtocols : []
-  };
+ruleSetsRouter.post("/", requireAdmin, async (req, res) => {
+  const ruleSet = await RuleSet.create(req.body);
+  
+  await AuditLog.create({
+    user: req.user.id,
+    username: req.user.username,
+    action: "CREATE_RULESET",
+    target: ruleSet.name,
+    details: `Created rule set: ${ruleSet.name}`
+  });
 
-  const ruleSet = await RuleSet.create(payload);
   res.status(201).json({ ruleSet });
 });
 
-ruleSetsRouter.delete("/:id", async (req, res) => {
-  await RuleSet.findByIdAndDelete(req.params.id);
+ruleSetsRouter.delete("/:id", requireAdmin, async (req, res) => {
+  const ruleSet = await RuleSet.findByIdAndDelete(req.params.id);
+  
+  if (ruleSet) {
+    await AuditLog.create({
+      user: req.user.id,
+      username: req.user.username,
+      action: "DELETE_RULESET",
+      target: ruleSet.name,
+      details: `Deleted rule set: ${ruleSet.name}`
+    });
+  }
+  
   res.json({ ok: true });
 });

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { downloadUrl, fetchJob, fetchResults, stopJob } from "../api";
+import { useAuth } from "../contexts/AuthContext";
 
 function AnalyticsTable({ title, subtitle, columns, rows, emptyText }) {
   return (
@@ -39,6 +40,7 @@ export default function ResultsPage() {
   const { jobId } = useParams();
   const [job, setJob] = useState(null);
   const [report, setReport] = useState(null);
+  const { role } = useAuth();
 
   useEffect(() => {
     let timer;
@@ -87,7 +89,7 @@ export default function ResultsPage() {
         </div>
         <div className="actions-row">
           <span className={`status-pill ${job.status}`}>{job.status}</span>
-          {job.liveMode && job.status === "running" && (
+          {job.liveMode && job.status === "running" && role === "admin" && (
              <button className="primary-button rose" onClick={handleStop}>Stop Interception</button>
           )}
           {!job.liveMode && (

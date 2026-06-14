@@ -12,6 +12,7 @@ export const config = {
   port: Number(process.env.PORT || 8000),
   clientUrl: process.env.CLIENT_URL || "http://localhost:5173",
   mongoUri: process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/dpi_dashboard",
+  jwtSecret: process.env.JWT_SECRET || "supersecret_dpi_key_replace_in_prod",
   rootDir: ROOT_DIR,
   enginePath: path.join(ROOT_DIR, "dpi_engine.exe"),
   uploadsDir: path.join(DATA_DIR, "uploads"),

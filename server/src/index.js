@@ -10,6 +10,9 @@ import { jobsRouter } from "./routes/jobs.js";
 import { rulesRouter } from "./routes/rules.js";
 import { ruleSetsRouter } from "./routes/ruleSets.js";
 import { analyticsRouter } from "./routes/analytics.js";
+import { authRouter } from "./routes/auth.js";
+import { auditRouter } from "./routes/audit.js";
+import { authenticate } from "./middleware/auth.js";
 
 async function start() {
   ensureDirs();
@@ -25,10 +28,14 @@ async function start() {
   app.use(express.json());
 
   app.use("/api/health", healthRouter);
-  app.use("/api/jobs", jobsRouter);
-  app.use("/api/rules", rulesRouter);
-  app.use("/api/rule-sets", ruleSetsRouter);
-  app.use("/api/analytics", analyticsRouter);
+  app.use("/api/auth", authRouter);
+  
+  // Protected Routes
+  app.use("/api/jobs", authenticate, jobsRouter);
+  app.use("/api/rules", authenticate, rulesRouter);
+  app.use("/api/rule-sets", authenticate, ruleSetsRouter);
+  app.use("/api/analytics", authenticate, analyticsRouter);
+  app.use("/api/audit", authenticate, auditRouter);
 
   app.listen(config.port, () => {
     console.log(`DPI dashboard server listening on http://localhost:${config.port}`);

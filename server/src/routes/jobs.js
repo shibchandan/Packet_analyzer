@@ -4,8 +4,10 @@ import { Router } from "express";
 import multer from "multer";
 
 import { Job } from "../models/Job.js";
+import { AuditLog } from "../models/AuditLog.js";
 import { buildJobPaths, runJob, stopJob } from "../services/engineService.js";
 import { config } from "../config.js";
+import { requireAdmin } from "../middleware/auth.js";
 
 
 export const jobsRouter = Router();
@@ -57,7 +59,7 @@ jobsRouter.get("/", async (_req, res) => {
   });
 });
 
-jobsRouter.post("/", upload.single("file"), async (req, res) => {
+jobsRouter.post("/", requireAdmin, upload.single("file"), async (req, res) => {
   const isLive = req.body.liveMode === "true";
   
   if (!isLive && !req.file) {
@@ -93,6 +95,14 @@ jobsRouter.post("/", upload.single("file"), async (req, res) => {
     blockProtocols: splitCsv(req.body.blockProtocols),
     loadBalancers: clampedLbs,
     fpsPerLb: clampedFps
+  });
+
+  await AuditLog.create({
+    user: req.user.id,
+    username: req.user.username,
+    action: "RUN_JOB",
+    target: outputName,
+    details: `Started ${isLive ? "Live Interception" : "PCAP processing"}`
   });
 
   void executeJob(job._id.toString());
@@ -140,7 +150,7 @@ jobsRouter.get("/:id/download", async (req, res) => {
   res.download(job.outputPath, job.outputName);
 });
 
-jobsRouter.post("/:id/stop", async (req, res) => {
+jobsRouter.post("/:id/stop", requireAdmin, async (req, res) => {
   const job = await Job.findById(req.params.id);
   if (!job) {
     res.status(404).json({ message: "Job not found" });
@@ -152,6 +162,13 @@ jobsRouter.post("/:id/stop", async (req, res) => {
   }
   
   if (stopJob(job._id.toString())) {
+    await AuditLog.create({
+      user: req.user.id,
+      username: req.user.username,
+      action: "STOP_JOB",
+      target: job.outputName,
+      details: "Force stopped job"
+    });
     res.json({ message: "Job stopped successfully" });
   } else {
     res.status(500).json({ message: "Failed to stop job" });
