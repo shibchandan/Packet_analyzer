@@ -47,9 +47,6 @@ function MainApp() {
         </nav>
         <div style={{ marginTop: 'auto', paddingTop: '2rem' }}>
           <p className="muted" style={{ fontSize: '0.875rem' }}>Logged in as: <strong>{username}</strong></p>
-          <button className="btn" onClick={logout} style={{ width: '100%', marginTop: '0.5rem', justifyContent: 'center' }}>
-            Sign Out
-          </button>
         </div>
       </aside>
       <main className="main-panel">

@@ -3,17 +3,13 @@ import { createContext, useContext, useState, useEffect } from "react";
 const AuthContext = createContext();
 
 export function AuthProvider({ children }) {
-  const [token, setToken] = useState(localStorage.getItem("token") || null);
-  const [role, setRole] = useState(localStorage.getItem("role") || null);
-  const [username, setUsername] = useState(localStorage.getItem("username") || null);
+  // Bypass Auth: Always logged in as Admin
+  const [token, setToken] = useState("local-admin-token");
+  const [role, setRole] = useState("admin");
+  const [username, setUsername] = useState("admin");
 
   const performLogin = (tokenData, roleData, usernameData) => {
-    localStorage.setItem("token", tokenData);
-    localStorage.setItem("role", roleData);
-    localStorage.setItem("username", usernameData);
-    setToken(tokenData);
-    setRole(roleData);
-    setUsername(usernameData);
+    // No-op
   };
 
   const logout = () => {
